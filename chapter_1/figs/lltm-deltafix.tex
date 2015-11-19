@@ -1,0 +1,26 @@
+\centering
+\begin{tikzpicture}[scale=.75, transform shape]
+
+  \filldraw [ppmc] (2.25, 1.25) rectangle (3.75, 8.75);
+
+  \node [p]  (s)  at (0.75,10) {$\sigma$};
+
+  \node [p]  (o)  at (0.75, 8) {$\theta$};
+
+  \node [d]  (y)  at (0.75, 6) {$y$};
+  \node [dr] (yr) at (3.00, 6) {$y^{(r)}$};
+
+  \node [p]  (d)  at (0.75, 4) {$\delta^*$};
+
+  \node [i]  (e)  at (0.00, 2) {$\epsilon$};
+
+  \node [p]  (b)  at (1.50,  0.25) {$\beta$};
+  \node [i]  (t)  at (1.50, -1.00) {$\tau$};
+
+  \foreach \from/\to in {s/o, o/y, d/y, b/d}
+    \draw [marrow] (\from) -- (\to);
+
+  \foreach \from/\to in {o/yr, d/yr}
+    \draw [garrow] (\from) -- (\to);
+
+\end{tikzpicture}

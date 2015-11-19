@@ -1,0 +1,28 @@
+\centering
+\begin{tikzpicture}[scale=.75, transform shape]
+
+  \node [p]  (z)  at (0,10) {$\zeta$};
+  \node [p]  (s)  at (2,10) {$\sigma$};
+
+  \node [p]  (o)  at (0, 8) {$\theta$};
+  \node [p]  (c)  at (2, 8) {$\gamma$};
+
+  \node [d]  (y)  at (0, 6) {$y$};
+
+  \node [p]  (d)  at (0, 4) {$\delta$};
+
+  \node [p]  (e)  at (0, 2) {$\epsilon$};
+  \node [p]  (b)  at (2, 4) {$\beta$};
+  
+  \node [p]  (t)  at (2, 2) {$\tau$};
+
+  \draw [items-box] (-1, 0.75) rectangle (1.25, 7);
+  \node [items-node] at (1.25, 0.75) {Items $i$};
+  
+  \draw [persons-box] (-1.25, 11.25) rectangle (1.00, 5);
+  \node [persons-node] at (-1.25, 11.25) {Persons $p$};
+
+  \foreach \from/\to in {s/z, c/o, z/o, o/y, d/y, b/d, t/e, e/d}
+    \draw [marrow] (\from) -- (\to);
+
+\end{tikzpicture}

@@ -1,0 +1,32 @@
+\centering
+\begin{tikzpicture}[scale=.75, transform shape]
+
+  \filldraw [ppmc] (3.25, 1.25) rectangle (4.75, 10.75);
+  \node [i]  at (0, 12) {~}; % Force some vertical space with invisible node.
+
+  \node [p]  (z)  at (0,10) {$\zeta$};
+  \node [p]  (s)  at (2,10) {$\sigma$};
+  \node [pr] (zr) at (4,10) {$\tilde \zeta$};
+
+  \node [p]  (o)  at (0, 8) {$\theta$};
+  \node [p]  (c)  at (2, 8) {$\gamma$};
+  \node [pr] (or) at (4, 8) {$\tilde \theta$};
+
+  \node [d]  (y)  at (0, 6) {$y$};
+  \node [dr] (yr) at (4, 6) {$\tilde y$};
+
+  \node [p]  (d)  at (0, 4) {$\delta$};
+  \node [p]  (b)  at (2, 4) {$\beta$};
+  \node [pr] (dr) at (4, 4) {$\tilde \delta$};
+
+  \node [p]  (e)  at (0, 2) {$\epsilon$};
+  \node [p]  (t)  at (2, 2) {$\tau$};
+  \node [pr] (er) at (4, 2) {$\tilde \epsilon$};
+
+  \foreach \from/\to in {s/z, c/o, z/o, o/y, d/y, b/d, t/e, e/d}
+    \draw [marrow] (\from) -- (\to);
+
+  \foreach \from/\to in {s/zr, zr/or, c/or, or/yr, t/er, er/dr, b/dr, dr/yr}
+    \draw [garrow] (\from) -- (\to);
+
+\end{tikzpicture}

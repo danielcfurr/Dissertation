@@ -1,0 +1,30 @@
+% Tikz styles presets ----------------------------------------------------------
+
+% Parameter and data nodes
+\tikzstyle{p} = [circle, draw=black, fill=blue!10, thick,
+                 inner sep=1pt, minimum size=8mm]
+\tikzstyle{d} = [rectangle, draw=black, fill=blue!10, thick,
+                 inner sep=1pt, minimum size=8mm]
+
+% Replicate parameter and data nodes
+\tikzstyle{pr} = [circle, draw=gray, fill=white, thick,
+                  inner sep=1pt, minimum size=8mm]
+\tikzstyle{dr} = [rectangle, draw=gray, fill=white, thick,
+                  inner sep=1pt, minimum size=8mm]
+
+% Arrow styles for model specification and for generating quantities
+\tikzstyle{marrow} = [solid, -{Stealth[length=2mm]}, draw=black]
+\tikzstyle{garrow} = [solid, -{Stealth[length=2mm]}, draw=gray]
+
+
+% Invisisble node (for maintaining equal figure sizes_
+\tikzstyle{i} = [circle, draw=none, fill=none, text=white]
+
+% Box for PPCM part of model
+\tikzstyle{ppmc}=[fill=red!10, draw=white]
+
+% Boxes and labels to indicate clustering in models
+\tikzstyle{items-box}    = [fill = none, draw = black!30!green]
+\tikzstyle{items-node}   = [text = black!30!green, anchor = south east]
+\tikzstyle{persons-box}  = [fill = none, draw = black!20!orange]
+\tikzstyle{persons-node} = [text = black!20!orange, anchor = north west]

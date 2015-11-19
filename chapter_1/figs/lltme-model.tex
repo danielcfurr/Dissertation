@@ -1,0 +1,26 @@
+\centering
+\begin{tikzpicture}[scale=.75, transform shape]
+
+  \node [p]  (s)  at (0.75,10) {$\sigma$};
+
+  \node [p]  (o)  at (0.75, 8) {$\theta$};
+
+  \node [d]  (y)  at (0.75, 6) {$y$};
+
+  \node [p]  (d)  at (0.75, 4) {$\delta$};
+
+  \node [p]  (e)  at (0.00, 2) {$\epsilon$};
+
+  \node [p]  (b)  at (1.50,  0.25) {$\beta$};
+  \node [p]  (t)  at (1.50, -1.00) {$\tau$};
+
+  \draw [items-box]   (-1, -.25) rectangle (4.0, 7);
+  \node [items-node] at (4.0, -.25) {Items $i$};
+  
+  \draw [persons-box] (-2, 9)      rectangle (3.0, 5);
+  \node [persons-node] at (-2, 9) {Persons $p$};
+
+  \foreach \from/\to in {s/o, o/y, d/y, b/d, t/e, e/d}
+    \draw [marrow] (\from) -- (\to);
+
+\end{tikzpicture}
