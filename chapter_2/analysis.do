@@ -166,18 +166,48 @@ preserve
 restore
 
 
-	 
-	 
-	 
-	 
-	 
 
-	 
-	 
-	 
-	 
-	 
-	 
+
+
+
+
+
+
+
+
+
+generate pen_01_2 = (p_dev_10_2 - p_dev_00_2) / 2
+generate pen_11_2 = (p_dev_11_2 - p_dev_00_2) / 2
+bysort I P: tabstat pen_01_2 pen_11_2, ///
+	statistics(mean semean n) by(tau) format(%9.1f)
+
+
+twoway scatter p_dev_11_1 p_dev_00_1 || function y = x, range(p_dev_00_1) ///
+	by(P I, note("") graphregion(fcolor(white)) rows(2) rescale )
+twoway scatter p_dev_01_2 p_dev_00_2 if tau == 0 || function y = x, range(p_dev_00_2) ///
+	by(P I, note("") graphregion(fcolor(white)) rows(2) rescale )
+	
+	
+twoway scatter p_dev_01_1 p_dev_00_1 || function y = x, range(p_dev_00_1) ///
+	by(P I, note("") graphregion(fcolor(white)) rows(2) rescale )
+	
+	
+twoway scatter p_aic_2 p_dev_01_2 || function y = x, range(p_dev_01_2) ///
+	by(P I, note("") graphregion(fcolor(white)) rows(2) rescale )
+
+twoway scatter p_aic_2 p_dev_11_2  if tau == .3 || ///
+	function y = x if tau == .3, range(p_dev_11_2) ///
+	by(P I, note("") graphregion(fcolor(white)) rows(2) rescale )
+
+bysort I P: tabstat p_aic_2 p_dev_01_2 p_dev_11_2, ///
+	statistics(mean semean n) by(tau) format(%9.1f)
+generate aic_less_01 = p_aic_2 < p_dev_01_2
+generate aic_less_11 = p_aic_2 < p_dev_11_2
+
+
+
+
+
 // OLS -------------------------------------------------------------------------
 
 

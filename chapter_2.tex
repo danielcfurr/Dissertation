@@ -36,7 +36,7 @@ Data are simulated for varying numbers of persons ($P$) and items ($I$) using th
 \begin{equation}
 	\epsilon_i \sim \mathrm{N}(0, \tau^2)
 ,\end{equation}
-where $x_{1i} = 1$ is an intercept and $x_{2i}$, $x_{3i}$, and $x_{4i}$ are indicator variables which each equal 1 for half of the items and 0 for the remainder. Each possible combination of the indicators occurs an equal number of times, and the generating model includes one interaction, $x_{2i}x_{3i}$. Table~\ref{tab:X} provides the design matrix for item covariates. The rows of the design matrix are repeated to accommodate $I > 8$ items.
+where $x_{1i} = 1$ is an intercept and $x_{2i}$, $x_{3i}$, and $x_{4i}$ are indicator variables which each equal 1 for half of the items and 0 for the remainder. Each possible combination of the indicators occurs an equal number of times, and the generating model includes one interaction, $x_{2i}x_{3i}$. Table~\ref{tab:X} provides the design matrix for item covariates. The rows of the design matrix are repeated to accommodate multiples of 8.
 
 \input{chapter_2/figs/table_x.tex}
 
@@ -47,7 +47,7 @@ The composite abilities are generated as
 \begin{equation} \label{eq:zeta}
 	\zeta_p \sim \mathrm{N}(0, \sigma^2)
 ,\end{equation}
-where $w_{1p}$ and $w_{2p}$ are also crossed indicator variables. Table~\ref{tab:W} presents the design matrix for person covariates, the rows of which are repeated to accommodate the $P$ persons.
+where $w_{1p}$ and $w_{2p}$ are also crossed indicator variables. Table~\ref{tab:W} presents the design matrix for person covariates, the rows of which are repeated to accommodate the $P = 4n$ persons.
 
 \input{chapter_2/figs/table_w.tex}
 
@@ -81,7 +81,7 @@ Model 2 adds an interaction:
 \delta_i^{(2)} = x_{1i}\beta_1 + x_{2i}\beta_2 + x_{3i}\beta_3 + x_{4i}\beta_4
 + x_{2i}x_{3i}\beta_5
 .\end{equation}
-Model 3 adds an additional (spurious \comment{find a better word}) interaction:
+Model 3 adds an additional, extraneous interaction:
 \begin{equation}
 \delta_i^{(3)} = x_{1i}\beta_1 + x_{2i}\beta_2 + x_{3i}\beta_3 + x_{4i}\beta_4
 + x_{2i}x_{3i}\beta_5 + x_{3i}x_{4i}\beta_6
@@ -117,7 +117,7 @@ where $k$ is the number of model parameters. The model with the lowest value of 
 	\label{fig:aic-bar}
 \end{figure}
 
-AIC is an approximation for holdout cross-validation, in which a model is estimated using a ``training'' dataset and then evaluated on a ``test'' dataset. In this instance, AIC approximates the deviance that would result from applying the trained model to a test dataset consisting of new persons and the same items. Figure~\ref{fig:person-bar} provides results for the selection procedure using this form of holdout cross-validation. This method performs worse across all conditions than AIC.
+AIC is an approximation for holdout cross-validation, in which a model is estimated using a ``training'' dataset and then evaluated on a ``test'' dataset. In this instance, AIC approximates the deviance that would result from applying the trained model to a test dataset consisting of new persons and the same items. \comment{Explain why, from chapter 1 or cite papers.} Figure~\ref{fig:person-bar} provides results for the selection procedure using this form of holdout cross-validation. This method performs worse across all conditions than AIC.
 
 \begin{figure}[htbp]
 	\centering
@@ -127,6 +127,7 @@ AIC is an approximation for holdout cross-validation, in which a model is estima
 	\label{fig:person-bar}
 \end{figure}
 
+\comment{Kuha, compare values of AIC to cross-validation deviance directly. Also, show results from BIC--presumably doesn't help.}
 
 %\section{Approximation via linear regression}
 %
@@ -199,7 +200,9 @@ In Figure~\ref{fig:both-line} the results are broken down into pairwise comparis
 
 \section{Discussion}
 
+\comment{Find papers on choosing between LLTMS.}
 
+\comment{(1) K-fold CV. (2) Consider a linear model to parallel holdout CV with new items. Possible to get marginal likelihood with linear model? (3) Show that AIC works with ``De Boeck'' version of model. (4) Consider extending topic to include linear crossed mixed-effects models.}
 
 %\bibliographystyle{apacite}
 %\bibliography{../../Documents/References/references}
