@@ -1,123 +1,125 @@
-run sim_dataset.do
-
-
-// Tables for design matrices --------------------------------------------------
-
-sim_dataset, i_factor(1) p_factor(1)
-drop if new_person | new_item
-
-// requires outtable
-// ssc install outtable
-// outtable is not versatile, so must fixed up "raw" latex output
-
-sort x1-x4
-mkmat x1-x4 if person == 1, matrix(X)
-matrix list X
-outtable using "figs/table_x_raw", mat(X) replace nobox asis  ///
-	caption("Items design matrix") norowlab clabel("tab:X")
-
-sort w1-w2
-mkmat w1-w2 if item == 1, matrix(W)
-matrix list W
-outtable using "figs/table_w_raw", mat(W) replace nobox asis  ///
-	caption("Persons design matrix") norowlab clabel("tab:W")
-	
-	
 // Find r2 for values of tau ---------------------------------------------------
 
-// Make matrix of values of tau and resulting R^2
-matrix R = J(100,2,.)
-matrix colnames R = tau r2
-local i = 0
-forvalues tau = .00(.01)1 {
-	local ++i
-	sim_dataset, i_factor(1) p_factor(0) tau(`tau')
-	if "`v_xB'" == "" {
-		quietly summarize xB
-		local v_xB = r(Var) * (_N - 1) / _N // Correct sample variance to population
-	}
-	local r2 = `v_xB' / (`tau'^2 + `v_xB')
-	matrix R[`i',1] = `tau'
-	matrix R[`i',2] = `r2'
-}
+// Get fixed item effects variance
+run sim_dataset.do
+sim_dataset, tau(0)
+quietly summarize xB
+local var_xB = r(Var)
 
-// Plot R^2 against tau
+// Make dataset of possible values of tau and r-square
 clear
-svmat R, names(col)
-generate selected = inlist(tau, float(.0), float(.1), float(.3), float(.5))
-twoway line r2 tau || scatter r2 tau if selected, ///
+set obs 151
+egen double tau = fill(0(.01)1.5)
+replace tau = round(tau, .01)
+generate tausq = tau^2
+generate rsq = `var_xB' / (`var_xB' + tausq)
+generate selected = inlist(tau, 0, .1, .5, 1)
+
+// Plot values of r-square against tau
+twoway line rsq tau || scatter rsq tau if selected, ///
+	plotregion(margin(zero)) yscale(range(0 1) noextend) ylabel(0(.2)1) ///
 	msymbol(circle_hollow) msize(1.75) legend(off) ///
 	graphregion(fcolor(white)) xtitle({&tau}) ytitle(R{superscript:2})
 graph export figs/rsq_vs_tau.pdf, replace
 
-// Make a file for latex macros related to selected values of tau and R^2
-mkmat tau r2 if selected, matrix(S)
-local R = rowsof(S)
-forvalues r = 1/`R' {
-	display `r'
-	local tau_r = strofreal(el(S, `r', 1), "%9.2f")
-	local tau2_r = strofreal(el(S, `r', 1)^2, "%9.2f")
-	local r2_r = strofreal(el(S, `r', 2), "%9.2f")
-	if `r' == 1 {
-		local tau_vec = "\{`tau_r'"
-		local tau2_vec = "\{`tau2_r'"
-		local r2_vec = "\{`r2_r'"
-	}
-	else if `r' == `R' {
-		local tau_vec = "`tau_vec', `tau_r'\}"
-		local tau2_vec = "`tau2_vec', `tau2_r'\}"
-		local r2_vec = "`r2_vec', `r2_r'\}"
-	}
-	else {
-		local tau_vec = "`tau_vec', `tau_r'"
-		local tau2_vec = "`tau2_vec', `tau2_r'"
-		local r2_vec = "`r2_vec', `r2_r'"
-	}
-}
+// A program to get list of values from a variable and write this to latex
+// macro. Macro option {#1} allows inclusion of "and".
+capture program drop writelist
+program define writelist
+	syntax varlist(max=1) [if] [, file(string) macro(string) fmt(string)]
+	if ("`fmt'" == "") local fmt = "%9.2f"
+	preserve
+		if("`if'" != "") quietly keep `if'
+		local newvalue = strofreal(`varlist'[1], "`fmt'")
+		local list = "`newvalue'"
+		forvalues n = 2/`=_N - 1' {
+			local newvalue = strofreal(`varlist'[`n'], "`fmt'")
+			local list = "`list', `newvalue'"
+		}
+		local newvalue = strofreal(`varlist'[`=_N'], "`fmt'")
+		local list = "`list', {#1} `newvalue'"
+	restore
+	local command = "\newcommand{\\`macro'}[1][]{`list'}"
+	display subinstr("`list'", "{#1} ", "", 1)
+	display "`command'"
+	if("`file'" != "") file write `file' "`command'" _n
+end
+
+// Write a file of latex macros for generating values
 file open myfile using "figs\macros.tex", write replace
-local upsilon2 = strofreal(`v_xB', "%9.2f")
-file write myfile "\newcommand{\genupsilonsq}{`upsilon2'}" _n
-file write myfile "\newcommand{\gentau}{`tau_vec'}" _n
-file write myfile "\newcommand{\gentausq}{`tau2_vec'}" _n
-file write myfile "\newcommand{\genrsq}{`r2_vec'}" _n
+	local upsilon2 = strofreal(`var_xB', "%9.2f")
+	file write myfile "\newcommand{\genupsilonsq}{`upsilon2'}" _n
+	writelist tau if selected, file(myfile) macro(gentau) fmt("%9.2f")
+	writelist tausq if selected, file(myfile) macro(gentausq) fmt("%9.2f")
+	writelist rsq if selected, file(myfile) macro(rsq) fmt("%9.2f")
 file close myfile
 
 
-// LLTM ------------------------------------------------------------------------
+// Plot N effective parameters -------------------------------------------------
 
 clear
-local sims : dir . files "sim_*.dta"
+local sims : dir . files "sim1_*.dta"
 foreach f in `"`sims'"' {
    append using `f'
 }
+drop if insample == . // Not usually necessary
 
-// Check for convergence of all simulations
-tabstat *_converged_*, stat(count sum)
-drop *_converged_*
+foreach var of varlist aic-newboth {
+	generate p_`var'_ = (`var' - insample) / 2
+}
 
-generate n =_n
-generate P = "P = " + string(pfactor * 4, "%04.0f")
-generate I = "I = " + string(ifactor * 8, "%03.0f")
+collapse (mean) p_*_, by(model tau)
+
+// Write values of AIC and BIC to latex macros.
+file open myfile using "figs\macros.tex", write append
+	writelist p_aic_ if tau == 0, file(myfile) macro(aic) fmt("%9.2f")
+	writelist p_bic_ if tau == 0, file(myfile) macro(bic) fmt("%9.2f")
+file close myfile
+
+reshape wide p_*_, i(tau) j(model)
+
+// A program to plot effective n paramters
+capture program drop p_plot
+program define p_plot
+	syntax varlist, [save(string)]
+	twoway connect `varlist' tau, ///
+		msymbol(circle triangle square) ///
+		graphregion(fcolor(white)) ///
+		xtitle({&tau}) ytitle("Effective N Parameters") ///
+		legend(label(1 "Model 1") label(2 "Model 2") label(3 "Model 3") ///
+			rows(1) region(lcolor(white)))	
+	if "`save'" != "" {
+		graph export "`save'", replace
+	}
+end
+
+p_plot p_aic_*
+p_plot p_bic_*
+p_plot p_newpersons_*, save("figs/p_newpersons.pdf")
+p_plot p_newitems_*, save("figs/p_newitems.pdf")
+p_plot p_newboth_*, save("figs/p_newboth.pdf")
+
+
+// Plot selection results ------------------------------------------------------
+
+clear
+local sims : dir . files "sim1_*.dta"
+foreach f in `"`sims'"' {
+   append using `f'
+}
+drop if insample == . // Not usually necessary
+
+reshape wide insample-newboth, i(tau seed) j(model)
 
 // Variables to indicate which model selected for each metric
-foreach stub in p_dev_01 p_dev_11 p_aic i_dev_11 i_aic {
+foreach stub in aic bic newpersons newitems newboth {
 	egen double min_`stub' = rowmin(`stub'*)
 	forvalues m = 1/3 {
-		generate select_`stub'_`m' = (`stub'_`m' == min_`stub') if (`stub'_`m' < .)
+		generate select_`stub'_`m' = (`stub'`m' == min_`stub') if (`stub'`m' < .)
 	}
 }
 drop min_*
 
-// Variable to indicate which model selected based on p-values
-forvalues p = 2/3 {
-	generate temp`p' = p_pcheck_`p' < .05
-}
-generate select_pcheck_1 = !temp2
-generate select_pcheck_2 = temp2 & !temp3
-generate select_pcheck_3 = temp2 & temp3
-drop p_pcheck_1 temp*
-
-// Program to make bar graphs of selected models
 capture program drop selectbar
 program define selectbar
 	syntax varlist [, save(string)]
@@ -134,7 +136,7 @@ program define selectbar
 		}
 		graph bar `varlist' if `nmissing' == 0, nofill ///	
 			over(tau, label(labsize(small)) relabel(`relabel')) ///
-			by(P I, note("") graphregion(fcolor(white)) rows(2)) ///
+			graphregion(fcolor(white)) ///
 			legend(rows(1) label(1 "Model 1") label(2 "Model 2") ///
 				label(3 "Model 3") region(lcolor(white))) ///
 			bar(1, fintensity(*1)) bar(2, fintensity(*.7)) bar(3, fintensity(*.4)) ///
@@ -145,103 +147,61 @@ program define selectbar
 	}
 end
 
-selectbar select_pcheck*, save("figs/p_pcheck.pdf")
-selectbar select_p_aic*, save("figs/p_aic.pdf")
-selectbar select_p_dev_01*, save("figs/p_new_person_same_item.pdf")
-selectbar select_p_dev_11*, save("figs/p_new_person_new_item.pdf")
-selectbar select_i_dev_11*, save("figs/i_new_person_new_item.pdf")
-selectbar select_i_aic*, save("figs/i_new_person_new_item.pdf")
-
-preserve
-	generate s1 = p_dev_11_1 < p_dev_11_2
-	generate s3 = p_dev_11_3 < p_dev_11_2
-	collapse (mean) s1 s3, by(tau I P)
-	twoway connected s1 s3 tau, yscale(range(0 1) noextend) ///
-		by(I P, note("") graphregion(fcolor(white)) rows(2)) ///
-		lcolor(navy forest_green) mcolor(navy forest_green) ///
-		msymbol(circle triangle) xlabels(0(.1).5) ///
-		xtitle({&tau}) ytitle(Proportion of times selected over Model 2) ///
-		legend(rows(1) label(1 "Model 1") label(2 "Model 3") region(lcolor(white)))	
-	graph export figs/both_line.pdf, replace
-restore
+selectbar select_aic_*, save("figs/select_aic.pdf")
+selectbar select_bic_*, save("figs/select_bic.pdf")
+selectbar select_newpersons_*, save("figs/select_newpersons.pdf")
+selectbar select_newitems_*, save("figs/select_newitems.pdf")
+selectbar select_newboth_*, save("figs/select_newboth.pdf")
 
 
+// Plot N effective parameters for CV over items -------------------------------
 
+clear
+local sims : dir . files "sim2_*.dta"
+foreach f in `"`sims'"' {
+   append using `f'
+}
+drop if insample == . // Not usually necessary
 
-
-
-
-
-
-
-
-
-generate pen_01_2 = (p_dev_10_2 - p_dev_00_2) / 2
-generate pen_11_2 = (p_dev_11_2 - p_dev_00_2) / 2
-bysort I P: tabstat pen_01_2 pen_11_2, ///
-	statistics(mean semean n) by(tau) format(%9.1f)
-
-
-twoway scatter p_dev_11_1 p_dev_00_1 || function y = x, range(p_dev_00_1) ///
-	by(P I, note("") graphregion(fcolor(white)) rows(2) rescale )
-twoway scatter p_dev_01_2 p_dev_00_2 if tau == 0 || function y = x, range(p_dev_00_2) ///
-	by(P I, note("") graphregion(fcolor(white)) rows(2) rescale )
-	
-	
-twoway scatter p_dev_01_1 p_dev_00_1 || function y = x, range(p_dev_00_1) ///
-	by(P I, note("") graphregion(fcolor(white)) rows(2) rescale )
-	
-	
-twoway scatter p_aic_2 p_dev_01_2 || function y = x, range(p_dev_01_2) ///
-	by(P I, note("") graphregion(fcolor(white)) rows(2) rescale )
-
-twoway scatter p_aic_2 p_dev_11_2  if tau == .3 || ///
-	function y = x if tau == .3, range(p_dev_11_2) ///
-	by(P I, note("") graphregion(fcolor(white)) rows(2) rescale )
-
-bysort I P: tabstat p_aic_2 p_dev_01_2 p_dev_11_2, ///
-	statistics(mean semean n) by(tau) format(%9.1f)
-generate aic_less_01 = p_aic_2 < p_dev_01_2
-generate aic_less_11 = p_aic_2 < p_dev_11_2
-
-
-
-
-
-// OLS -------------------------------------------------------------------------
-
-
-// Haven't found a use for this--should have helped with "by" labels
-forvalues i = 1/16 {
-	label define i_factor `i' "I = `=8*`i''", modify
-} 
-
-use ols_sim.dta, clear
-label values i_factor i_factor
-generate I = "I = " + string(i_factor * 8, "%03.0f")
-egen double min = rowmin(rss_out*)
-forvalues m = 1/3 {
-	generate select`m' = rss_out`m' == min
+foreach var of varlist aic-newitems {
+	generate p_`var'_ = (`var' - insample) / 2
 }
 
-global bar_legend = `"legend(rows(1) label(1 "Model 1") label(2 "Model 2") label(3 "Model 3") region(lcolor(white)))"'
-global bar_bars = `"bar(1, fintensity(*1)) bar(2, fintensity(*.7)) bar(3, fintensity(*.4))"'
-global bar_over_olssubopts = `"label(labsize(small)) relabel(1 "{&tau} = .1" 2 "{&tau} = .3" 3 "{&tau} = .5")"'
-graph bar select* if tau > 0, over(tau, $bar_over_olssubopts) ///
-	by(I, note("") graphregion(fcolor(white)) rows(1)) ///
-	$bar_legend $bar_bars ///
-	ytitle(Proportion of times selected) 
-graph export figs/ols_bar.pdf, replace
+collapse (mean) p_*_, by(model tau)
 
-preserve
-	generate s1 = rss_out1 < rss_out2
-	generate s3 = rss_out3 < rss_out2
-	collapse (mean) s1 s3, by(tau I)
-	twoway connected s1 s3 tau, yscale(range(0 1) noextend) ///
-		by(I, note("") graphregion(fcolor(white)) rows(1)) ///
-		lcolor(navy forest_green) mcolor(navy forest_green) ///
-		msymbol(circle triangle) ///
-		xtitle({&tau}) ytitle(Proportion of times selected over Model 2) ///
-		legend(rows(1) label(1 "Model 1") label(2 "Model 3") region(lcolor(white)))	
-	graph export figs/ols_line.pdf, replace
-restore
+// Write values of AIC and BIC to latex macros.
+file open myfile using "figs\macros.tex", write append
+	writelist p_aic_ if tau == 1, file(myfile) macro(aicitem) fmt("%9.2f")
+	//writelist p_bic_ if tau == 0, file(myfile) macro(bic) fmt("%9.2f")
+file close myfile
+
+reshape wide p_*_, i(tau) j(model)
+
+p_plot p_aic_*
+p_plot p_newitems_*, save("figs/p_newitems.pdf")
+
+
+// Plot selection results for CV over items ------------------------------------
+
+clear
+local sims : dir . files "sim2_*.dta"
+foreach f in `"`sims'"' {
+   append using `f'
+}
+drop if insample == . // Not usually necessary
+
+reshape wide insample-newitems, i(tau seed) j(model)
+
+// Variables to indicate which model selected for each metric
+foreach stub in aic bic newitems {
+	egen double min_`stub' = rowmin(`stub'*)
+	forvalues m = 1/3 {
+		generate select_`stub'_`m' = (`stub'`m' == min_`stub') if (`stub'`m' < .)
+	}
+}
+drop min_*
+
+selectbar select_aic_*, save("figs/select_aic2.pdf")
+//selectbar select_bic_*, save("figs/select_bic2.pdf")
+selectbar select_newitems_*, save("figs/select_newitems2.pdf")
+

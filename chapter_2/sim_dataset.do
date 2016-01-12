@@ -1,57 +1,58 @@
 capture program drop sim_dataset
 program define sim_dataset
 	
-	syntax [, i_factor(integer 3) p_factor(integer 100) ///
-		tau(real .3) sigma(real 1) ]
+	syntax [, nitems(integer 32) npersons(integer 500) tau(real .5) sigma(real 1) ]
 	
-	local beta1 = -.5
-	local beta2 = .5
-	local beta3 = .5
-	local beta4 = .5
+	local beta1 = -.375
+	local beta2 = 1
+	local beta3 = 1
+	local beta4 = -1
 	local beta5 = -.5
-	local gamma1 = .5
+	local gamma1 = -.5
 	local gamma2 = .5
 	
 	clear
 	
-	// Make item 8-item set (all x* combinations)
+	// Make base dataset (each unique combination of person and item fixed parts)
 	quietly: set obs 2
+	forvalues i = 1/2 {
+		egen w`i' = seq(), from(0) to(1)
+	}
 	generate x1 = 1
 	forvalues i = 2/4 {
 		egen x`i' = seq(), from(0) to(1)
 	}
-	fillin x*
-	drop _fillin
-	
-	// Expand to full item set. Sim residuals and calc difficulty.
-	quietly: expand `=`i_factor''
-	quietly: expand 2, generate(new_item)
-	generate item = _n
-	generate epsilon = rnormal(0, `tau')
+	fillin w* x*
+
+	// Fixed part of person and items
+	generate wC = `gamma1'*w1 + `gamma2'*w2
 	generate xB = `beta1'*x1 + `beta2'*x2 + `beta3'*x3 + `beta4'*x4 + `beta5'*x2*x3
-	generate delta = xB + epsilon
 	
-	if `p_factor' > 0 {
+	// Expand to full dataset
+	egen temp_item_base = group(x1-x4)
+	egen temp_person_base = group(w1-w2)
+	quietly: expandcl `=`nitems'/8', cluster(temp_item_base) generate(item)
+	quietly: expandcl `=`npersons'/4', cluster(temp_person_base) generate(person)
 	
-		// Make 4-person set (all w* combinations)
-		quietly: expandcl 4, cluster(x1) generate(w_temp)
-		quietly: recode w_temp (1 2 = 0) (else = 1), generate(w1)
-		quietly: recode w_temp (1 3 = 0) (else = 1), generate(w2)
-		quietly: expand 2, generate(new_person)
-		quietly: expandcl `p_factor', cluster(new_person w_temp) generate(person)
-		
-		// Add person residuals, calculate fixed and full ability
-		quietly: generate zeta_temp = rnormal(0, `sigma') if item == 1
-		quietly: bysort person: egen zeta = mean(zeta_temp)
-		generate wC = `gamma1'*w1 + `gamma2'*w2
-		generate theta = wC + zeta
-		
-		drop *_temp
-		
-		// Simulate response
-		generate yhat = invlogit(theta - delta)
-		generate y = rbinomial(1, yhat)
-		
-	}	
+	// Simulate item residuals for in and out of sample
+	quietly: generate temp_epsilon_in = rnormal(0, `tau') if person == 1
+	quietly: generate temp_epsilon_out = rnormal(0, `tau') if person == 1
+	quietly: bysort item: egen epsilon_in = mean(temp_epsilon_in)
+	quietly: bysort item: egen epsilon_out = mean(temp_epsilon_out)
+	
+	// Simulate person residuals for in and out of sample
+	quietly: generate temp_zeta_in = rnormal(0, `sigma') if item == 1
+	quietly: generate temp_zeta_out = rnormal(0, `sigma') if item == 1
+	quietly: bysort person: egen zeta_in = mean(temp_zeta_in)
+	quietly: bysort person: egen zeta_out = mean(temp_zeta_out)
+	
+	// Simulate responses
+	generate y = rbinomial(1, invlogit(wC + zeta_in - xB - epsilon_in))
+	generate y_newpersons = rbinomial(1, invlogit(wC + zeta_out - xB - epsilon_in))
+	generate y_newitems = rbinomial(1, invlogit(wC + zeta_in - xB - epsilon_out))
+	generate y_newboth = rbinomial(1, invlogit(wC + zeta_out - xB - epsilon_out))
+	
+	drop _fillin temp_*
 
 end
+
