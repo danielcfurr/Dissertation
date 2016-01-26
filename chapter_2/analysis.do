@@ -8,12 +8,12 @@ local var_xB = r(Var)
 
 // Make dataset of possible values of tau and r-square
 clear
-set obs 151
-egen double tau = fill(0(.01)1.5)
+set obs 101
+egen double tau = fill(0(.01)1)
 replace tau = round(tau, .01)
 generate tausq = tau^2
 generate rsq = `var_xB' / (`var_xB' + tausq)
-generate selected = inlist(tau, 0, .1, .5, 1)
+generate selected = inlist(tau, 0, .1, .3, .5)
 
 // Plot values of r-square against tau
 twoway line rsq tau || scatter rsq tau if selected, ///
@@ -58,31 +58,38 @@ file close myfile
 // Plot N effective parameters -------------------------------------------------
 
 clear
-local sims : dir . files "sim1_*.dta"
-foreach f in `"`sims'"' {
-   append using `f'
+local sims : dir . files "sim1_result_*.csv"
+display `sims'
+foreach csv of local sims {
+	tempfile tf
+	preserve
+		 quietly import delimited using `csv',  asdouble clear
+		 quietly save `tf', replace
+	restore
+	append using `tf'
 }
-drop if insample == . // Not usually necessary
 
 foreach var of varlist aic-newboth {
 	generate p_`var'_ = (`var' - insample) / 2
 }
 
-collapse (mean) p_*_, by(model tau)
+collapse (mean) p_*_, by(condition tau nitems npersons model)
 
 // Write values of AIC and BIC to latex macros.
 file open myfile using "figs\macros.tex", write append
-	writelist p_aic_ if tau == 0, file(myfile) macro(aic) fmt("%9.2f")
+	writelist p_aic_ if tau == 0, file(myfile) macro(aic) fmt("%9.0f")
 	writelist p_bic_ if tau == 0, file(myfile) macro(bic) fmt("%9.2f")
 file close myfile
 
-reshape wide p_*_, i(tau) j(model)
+reshape wide p_*_, i(condition tau nitems npersons ) j(model)
+generate overtau = condition <= 4
+generate overnitems = tau == .3
 
 // A program to plot effective n paramters
 capture program drop p_plot
 program define p_plot
-	syntax varlist, [save(string)]
-	twoway connect `varlist' tau, ///
+	syntax varlist [if], [save(string)]
+	twoway connect `varlist' tau `if', ///
 		msymbol(circle triangle square) ///
 		graphregion(fcolor(white)) ///
 		xtitle({&tau}) ytitle("Effective N Parameters") ///
@@ -93,10 +100,9 @@ program define p_plot
 	}
 end
 
-p_plot p_aic_*
-p_plot p_bic_*
-p_plot p_newpersons_*, save("figs/p_newpersons.pdf")
-p_plot p_newitems_*, save("figs/p_newitems.pdf")
+p_plot p_aic_* if overtau
+p_plot p_newpersons_* if overtau, save("figs/p_newpersons.pdf")
+p_plot p_newitems_* if overtau, save("figs/p_newitems.pdf")
 p_plot p_newboth_*, save("figs/p_newboth.pdf")
 
 

@@ -1,17 +1,19 @@
 capture program drop sim_dataset
 program define sim_dataset
 	
-	syntax [, nitems(integer 32) npersons(integer 500) tau(real .5) sigma(real 1) ]
+	syntax [, nitems(integer 32) npersons(integer 500) ///
+		tau(real .5) sigma(real 1) seed(integer -1) ]
 	
-	local beta1 = -.375
-	local beta2 = 1
-	local beta3 = 1
-	local beta4 = -1
+	local beta1 = -.5
+	local beta2 = .5
+	local beta3 = .5
+	local beta4 = .5
 	local beta5 = -.5
-	local gamma1 = -.5
+	local gamma1 = .5
 	local gamma2 = .5
 	
 	clear
+	if(`seed' > -1) set seed `seed'
 	
 	// Make base dataset (each unique combination of person and item fixed parts)
 	quietly: set obs 2
@@ -53,6 +55,6 @@ program define sim_dataset
 	generate y_newboth = rbinomial(1, invlogit(wC + zeta_out - xB - epsilon_out))
 	
 	drop _fillin temp_*
-
+	
 end
 
