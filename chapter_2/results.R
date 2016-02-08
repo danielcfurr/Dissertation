@@ -2,6 +2,14 @@ library(reshape2)
 library(ggplot2)
 theme_set(theme_bw())
 
+# Adapted from: http://stackoverflow.com/questions/8197559/emulate-ggplot2-default-color-palette
+gg_color_hue <- function(n) {
+  hues = seq(15, 375, length=n+1)
+  hcl(h=hues, l=65, c=100)[1:n]
+}
+ggcolors = gg_color_hue(3)
+
+
 
 # Plot of r-square against tau -------------------------------------------------
 
@@ -16,21 +24,21 @@ r.sq <- function(tau, upsilon.sq) upsilon.sq / (tau^2 + upsilon.sq)
 tau <- c(0, .1, .3, .5)
 pts <- data.frame(tau = tau, r.sq = r.sq(tau, upsilon.sq))
 
-ggplot() + 
+ggplot() +
   coord_cartesian() +
   scale_x_continuous(limits = c(0, 1)) +
   scale_y_continuous(limits = c(0, 1)) +
   geom_point(data = data.frame(pts),
              mapping = aes(x = tau, y = r.sq),
              size = 2) +
-  stat_function(data = data.frame(x = c(0, .75)), 
+  stat_function(data = data.frame(x = c(0, .75)),
                 mapping = aes(x),
-                fun = r.sq, 
+                fun = r.sq,
                 args = list(upsilon.sq = upsilon.sq)) +
   xlab(expression(paste("Residual item SD (", tau, ")"))) +
   ylab(expression(paste("Explained variance (", R^2, ")")))
 ggsave("figs/rsq_vs_tau.pdf", family = "Times", width = 3, height = 2,
-       units = "in", pointsize = 9)     
+       units = "in", pointsize = 9)
 
 
 # Set up data frame of simulation results --------------------------------------
@@ -70,7 +78,7 @@ melted$overtau <- melted$condition %in% 1:4
 melted$overnitems <- melted$tau == .3
 
 # Add rows for selection via likelihood ratio test
-insample.cast <- dcast(subset(melted, variable == "insample"), 
+insample.cast <- dcast(subset(melted, variable == "insample"),
                        seed + condition + tau + nitems + npersons + overtau + overnitems ~ model)
 insample.cast$p2v1 <- 1 - pchisq(insample.cast[, "1"] - insample.cast[, "2"],
                                  df = 1)
@@ -81,7 +89,7 @@ chisq.cast[, "1"] = insample.cast$p2v1 >= .05
 chisq.cast[, "2"] = insample.cast$p2v1 < .05 & insample.cast$p3v2 >= .05
 chisq.cast[, "3"] = insample.cast$p2v1 < .05 & insample.cast$p3v2 < .05
 chisq.melt <- melt(chisq.cast,
-                   id.vars = c("seed", "condition", "tau", "nitems", "npersons", 
+                   id.vars = c("seed", "condition", "tau", "nitems", "npersons",
                                "overtau", "overnitems"),
                    measure.vars = as.character(1:3),
                    variable.name = "model",
@@ -94,9 +102,9 @@ melted <- rbind(melted, chisq.melt)
 
 # Add column for factor variable with long names for each "variable"
 labels <- c("lrtest" = "Likelihood ratio test",
+            "insample" = "In-sample deviance",
             "aic" = "AIC",
             "bic" = "BIC",
-            "insample" = "In-sample deviance",
             "newpersons" = "CV over persons",
             "newitems" = "CV over items",
             "newboth" = "CV over persons and items")
@@ -117,7 +125,7 @@ grouping.list <- with(melted, list(tau = tau,
 # Plots of selection -----------------------------------------------------------
 
 selected <- aggregate(melted$selected, by = grouping.list, FUN = mean)
-selected <- subset(selected, variable %in% c("lrtest", "aic", "bic", 
+selected <- subset(selected, variable %in% c("lrtest", "aic", "bic",
                                              "newpersons", "newitems"))
 
 ggplot(subset(selected, overtau)) +
@@ -166,6 +174,68 @@ ggplot(subset(penalty, variable %in% c("newpersons", "newitems") & overnitems)) 
   facet_wrap(~labelled.variable, scales = "free_y")
 ggsave("figs/k_overnitems.pdf", family = "Times", width = 5, height = 2,
        units = "in", pointsize = 9)
+
+
+#  -------------------------------------------------------------------
+
+diffs <- dcast(melted[, ! names(melted) %in% c("k", "selected")],
+               ... ~ model,
+               value.var = "value")
+diffs <- subset(diffs, overtau & variable %in% c("aic", "bic",
+                                                 "newpersons", "newitems"))
+diffs$diff1 <- diffs[, "1"] - diffs[, "2"]
+diffs$diff3 <- diffs[, "3"] - diffs[, "2"]
+
+percent <- function(x, gt) {
+  number <- mean( (x > 0) == gt) * 100
+  string <- paste0(sprintf("%0.1f", number), "%")
+  return(string)
+}
+wins <- aggregate(cbind(diff1, diff3) ~ variable + condition,
+                  diffs, percent, gt = FALSE)
+names(wins) <- sub("diff", "win", names(wins))
+losses <- aggregate(cbind(diff1, diff3) ~ variable + condition,
+                    diffs, percent, gt = TRUE)
+names(losses) <- sub("diff", "lose", names(losses))
+win_lose <- merge(wins, losses)
+diffs <- merge(diffs, win_lose)
+
+p1 <- ggplot(diffs) +
+  aes(diff1) + #xlim(-200, 200) +
+  facet_grid(tau ~ labelled.variable) +
+  geom_histogram(binwidth = 20, fill = ggcolors[1]) +
+  geom_vline(aes(xintercept=0), linetype="dashed") +
+  ylab("Count") + xlab("Difference")
+p1_build <- ggplot_build(p1)
+x1 <- .95 * p1_build$panel$ranges[[1]]["x.range"][[1]]
+y1 <- .95 * p1_build$panel$ranges[[1]]["y.range"][[1]]
+p1 +
+  geom_text(aes(label = win1, x = x1[1], y = y1[2], fontface = "bold"),
+            stat = "unique", hjust = "left", vjust = "top", size = 3) +
+  geom_text(aes(label = lose1, x = x1[2], y = y1[2], fontface = "bold"),
+            stat = "unique", hjust = "right", vjust = "top", size = 3) +
+  theme(axis.text=element_text(size=6))
+ggsave("figs/twoway_model1.pdf", family = "Times", width = 5, height = 5, units = "in")
+
+
+p3 <- ggplot(diffs) +
+  aes(diff3) + #xlim(-200, 200) +
+  facet_grid(tau ~ labelled.variable) +
+  geom_histogram(binwidth = 20, fill = ggcolors[3]) +
+  geom_vline(aes(xintercept=0), linetype="dashed") +
+  ylab("Count") + xlab("Difference")
+p3_build <- ggplot_build(p3)
+x3 <- .95 * p3_build$panel$ranges[[1]]["x.range"][[1]]
+y3 <- .95 * p3_build$panel$ranges[[1]]["y.range"][[1]]
+p3 +
+  geom_text(aes(label = win3, x = x3[1], y = y3[2], fontface = "bold"),
+            stat = "unique", hjust = "left", vjust = "top", size = 3) +
+  geom_text(aes(label = lose3, x = x3[2], y = y3[2], fontface = "bold"),
+            stat = "unique", hjust = "right", vjust = "top", size = 3) +
+  theme(axis.text=element_text(size=9))
+ggsave("figs/twoway_model3.pdf", family = "Times", width = 5, height = 5, units = "in")
+
+
 
 
 # Write latex macros -----------------------------------------------------------
