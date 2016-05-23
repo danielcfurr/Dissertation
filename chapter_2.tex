@@ -1,276 +1,164 @@
-\documentclass[12pt, letterpaper]{article}
-\usepackage[left=1.00in, right=1.00in, top=1.00in, bottom=1.00in]{geometry}
-\usepackage{amsmath}
-\usepackage{apacite}
-\usepackage{graphicx}
+This chapter investigates how well cross-validation performs within the frequentist framework using maximum likelihood estimation, specifically for the purpose of selecting among models with differing sets of item covariates. With this estimation method, the item residuals in Equation~\ref{eq:eirm} are commonly omitted from the model to make calculation of the marginal likelihood tractable. This chapter shows that AIC \parencite{akaike1974new} corresponds to cross-validation over persons and then goes on to shows that AIC and holdout cross-validation over persons both perform poorly in this instance.
 
-\title{Chapter 2}
-\author{Daniel C. Furr}
-\date{\today}
+\section{Model and methods}
 
-
-\begin{document}
-
-\input{chapter_2/figs/macros.tex}
-\newcommand{\comment}[1]{{\footnotesize[\textit{#1}]}}
-
-\maketitle
-
-\tableofcontents
-\newpage
-{\footnotesize }
-
-
-\section{Introduction}
-
-%\begin{enumerate}
-%	\item Conducting holdout cross-validation require a decision of what parts of model are exchangeable. Approximations also depend on this, though may not be obvious. Easy for non-clustered data. For clustered data, must decide whether clusters are exchangeable. In a model with likelihood that is marginal over clusters, it is implied that clusters are exchangeable.
-%	\item Item response models generally have fixed part for items and random part for persons, reflecting an expectation that new data would have new people responding to the original items. CV ``over persons'' may be used to select person predictors.
-%	\item Not appropriate for selecting predictors for item difficulty. Need CV ``over items''. LLTM marginal likelihood not appropriate. LLTME marginal likelihood is appropriate, though difficult.
-%	\item This paper shows...
-%\end{enumerate}
-
-The use of cross-validation with clustered data requires a decision as to what aspects of the data are exchangeable, and so are resampled in new data, and what aspects persist. For item response data, in which responses are nested both within persons and items simultaneously, new data may consist of a new group of persons responding to the original items, which will be referred to as cross-validation ``over persons.'' Alternatively, new item response data may entail a new set of items presented to the original group of persons, which will be referred to as cross-validation ``over items.'' Other variations are possible, such as new data from both the same persons and items, an exact replication of the original data collection, or new data from both new persons and items.
-
-The form of new data determines what inferences may be made using cross-validation. For example, cross-validation must be done over persons in order to select for person ability predictors in a latent regression Rasch model \cite{}. In other words, a new sample of persons are needed to assess the predictors for ability. Likewise, if the goal is to choose predictors for item difficulty in a linear logistic test model (LLTM) \cite{}, cross-validation must be performed over items. \comment{explain why}
-
-The choice of model has strong implications regarding which aspects of the data are considered exchangeable, and hence would be resampled in cross-validation, and which are persistent. Specifically, the ``random effects'' are exchangeable, and the ``fixed effects'' are persistent. In general for item response models, person abilities (or their residuals) are modeled as random effects, while items are treated as fixed, implying that a repeat of the data collection would involve a new sample of persons responding to the same items.
-
-In this chapter, the difference in efficacy of employing cross-validation over persons versus over items with LLTM is investigated. AIC, a single dataset approximation to cross-validation, is shown to correspond to cross-validation over persons, which is not effective for the selection of item predictors.
-
-
-\section{Simulation and analysis methods}
-
-\subsection{Data generation}
-
-%Data are simulated for varying numbers of persons ($P$) and items ($I$) using the model described in Chapter~1. 
-Data are simulated using the model described in Chapter~1. 
-Specifically, the composite item difficulties are generated as
-\begin{equation}
-	\delta_i = x_{1i}\beta_1 + x_{2i}\beta_2 + x_{3i}\beta_3 + x_{4i}\beta_4 + x_{2i}x_{3i}\beta_5 + \epsilon_i
+Fitting the doubly explanatory model in Equation~\ref{eq:eirm} using marginal maximum likelihood is infeasible. Instead, the analysis models will be of the form:
+\begin{equation} \label{eq:latent-reg-lltm}
+	\Pr(y_{ip} = 1 | w_p, x_i, \zeta_p) =
+	\mathrm{logit}^{-1} \left [ (w_p'\gamma + \zeta_p) - x_i'\beta \right ]
 \end{equation}
 \begin{equation}
-	\epsilon_i \sim \mathrm{N}(0, \tau^2)
-,\end{equation}
-where $x_{1i} = 1$ is an intercept and $x_{2i}$, $x_{3i}$, and $x_{4i}$ are indicator variables which each equal 1 for half of the items and 0 for the remainder. Each possible combination of the indicators occurs an equal number of times, and the generating model includes one interaction, $x_{2i}x_{3i}$. Table~\ref{tab:X} provides the design matrix for item covariates. The rows of the design matrix are repeated to accommodate $I = 8n_i$ items, where $n_i$ is an integer.
-
-\input{chapter_2/figs/table_x.tex}
-
-The composite abilities are generated as
-\begin{equation} \label{eq:theta}
-	\theta_p = w_{1p}\gamma_1 + w_{2p}\gamma_2  + \zeta_p
-\end{equation}
-\begin{equation} \label{eq:zeta}
 	\zeta_p \sim \mathrm{N}(0, \sigma^2)
-,\end{equation}
-where $w_{1p}$ and $w_{2p}$ are also crossed indicator variables. Table~\ref{tab:W} presents the design matrix for person covariates, the rows of which are repeated to accommodate the $P = 4n_p$ persons, where $n_p$ is an integer.
-
-\input{chapter_2/figs/table_w.tex}
-
-A key feature of the generated datasets (and data of this type more generally) is the extent to which the item covariates account for the composite item difficulties. To this end, let $\upsilon^2 = \mathrm{var}(x'\mathbf{\beta})$ represent the variance of the structural part of item difficulty. Because of the item design, $\upsilon^2$ does not vary between simulated datasets, even if they have differing numbers of items (in multiples of eight). The total item variance is $\upsilon^2 + \tau^2$. Then
-\begin{equation}
-R^2 = \frac{\upsilon^2}{\upsilon^2 + \tau^2}
 \end{equation}
-represents the proportion of item variance accounted for by the item predictors. 
+Here the item residual for $\epsilon_i$ is omitted. This is a variation on the linear logistic test model, which is used to study the factors associated with the difficulty of items. The log-likelihood is
+\begin{equation} \label{eq:lltm-likelihood}
+	L(y ; \hat \sigma, \hat \gamma, \hat \beta) = 
+	\sum_{p=1}^P \log
+	\int \prod_{i=1}^I
+		p(y_{ip} | \hat \gamma, \hat \beta, \zeta_p)
+		p(\zeta_p | \hat \sigma)
+	~d \zeta_p
+\end{equation}
+which is readily estimated as a generalized linear mixed model \parencite{Rijmen2003}.
 
-The generating values for the structural part of item difficulties are $\beta = \{ -.5, .5, .5, .5, -.5 \}$ in all simulation conditions, and so $\upsilon^2 = \genupsilonsq$. Figure~\ref{fig:rsq-vs-tau} displays $R^2$ as a function of $\tau$ with $\upsilon^2$ fixed to this value. The points indicate the generating values of $\tau$, which are $\tau \in \{\gentau\}$ (or equivalently,  $\tau^2 \in \{\gentausq\}$). These values yield $R^2 \in \{\rsq\}$. On the person side, the generating values are fixed across conditions, with $\gamma = \{ .5, .5 \}$ and $\sigma = 1$. 
-%The numbers of persons and items vary: $I \in \{32, 128\}$ and $P \in \{300, 1000\}$.
+Let $\tilde y$ represent response data from a holdout dataset, which may involve new persons or new items.
+Then using the log-likelihood as the score function, $L(\tilde y ; \hat \sigma, \hat \gamma, \hat \beta)$ represents the fit of a model with parameter estimates from the original data evaluated in the holdout data. I will use the notation $\mathrm{CV}^{(P)}$ to represent $L(\tilde y ; \hat \sigma, \hat \gamma, \hat \beta)$ when $\tilde y$ arises from new persons and $\mathrm{CV}^{(I)}$ when it arises from new items. When a holdout dataset is available, $\mathrm{CV}^{(P)}$ or $\mathrm{CV}^{(I)}$ may be used to select among competing models.
 
-\begin{figure}[tbp]
-	\centering
-	\includegraphics{chapter_2/figs/rsq_vs_tau.pdf}
-	\caption{Proportion of total item variance explained by the item covariates ($R^2$) versus residual item standard deviation ($\tau$) in the simulated datasets. The points indicate generating values of $\tau \in \{\gentau\}$.}
-	\label{fig:rsq-vs-tau}
-\end{figure}
-
-%In summary, three factors are varied between simulation conditions in a crossed design: $\tau$ (and by extention, $R^2$), $I$, and $P$. 
-%All other elements are fixed across conditions. 
-In summary, the same generating values and design matrices are used across all simulation conditions.
-In the first simulation, generating values of $\tau$ are varied. In the second, the number of items are varied.
-To employ cross-validation, multiple datasets are simulated within each replication: the ``test'' dataset, a ``training'' dataset representing a sample with new items (corresponding to new draws of $\epsilon_i$), and another training dataset representing a sample with new persons (new draws of $\zeta_p$).
-
-
-\subsection{Models}
-
-Three models, differing only in specification of $\delta_i$, are fit. Model 1 includes only the ``main effects'' for the item covariates:
-\begin{equation}
-\delta_i^{(1)} = x_{1i}\beta_1 + x_{2i}\beta_2 + x_{3i}\beta_3 + x_{4i}\beta_4
-.\end{equation}
-Model 2 adds an interaction:
-\begin{equation}
-\delta_i^{(2)} = x_{1i}\beta_1 + x_{2i}\beta_2 + x_{3i}\beta_3 + x_{4i}\beta_4
-+ x_{2i}x_{3i}\beta_5
-.\end{equation}
-Model 3 adds an additional, extraneous interaction:
-\begin{equation}
-\delta_i^{(3)} = x_{1i}\beta_1 + x_{2i}\beta_2 + x_{3i}\beta_3 + x_{4i}\beta_4
-+ x_{2i}x_{3i}\beta_5 + x_{3i}x_{4i}\beta_6
-.\end{equation}
-Each analysis model models ability as in Equations~\ref{eq:theta} and \ref{eq:zeta} while omitting the item residual $\epsilon_i$. 
-Model~2 has the correct fixed part of the model, and consequently Model~2 matches the data generating model when $\tau = 0$. Otherwise, none of three models match the data generating model.
- 
-The analysis models are naive, given that in most simulation conditions $\tau > 0$. 
-More generally, the item predictors in an LLTM are not expected to exactly fit the item difficulties in actual application.
-Omitting item residuals is overly restrictive and results in failure to model the within-item dependency of responses. 
-This problem is the same as that which arises from fitting a non-hierarchical model to clustered data. 
-However, fitting random effects for both person and items is prohibitively difficult with maximum likelihood estimation, so researchers often resort to fitting models like the above.
-
-
-\section{Simulation~1}
-
-Datasets consisting of $\npersons$ persons and $\nitems$ items are generated with values of $\tau \in \gentau$. The simulation is carried out for $\nreps$ replications for each value of $\tau$. 
-
-
-\subsection{Naive cross-validation methods}
-
-One naive approach to model selection is the use of significance testing for parameters. In order to select among nested analysis models, a researcher may conduct likelihood ratio tests on pairs of models. If the test rejects the simpler model in a pair, the more complex model is retained and compared against a still more complex model. This procedure continues until the test fails to reject a model or when only the most complex model remains.
-
-The first panel of Figure~\ref{fig:select-overtau} provides the proportion of times each model is selected using likelihood ratio tests in the simulation.
-Model~2 is selected the large majority of times when $\tau$ is zero or small, corresponding to situations in which this model is the true model or almost so.
-As $\tau$ becomes greater, the more complex Model~3 is selected increasingly often.
-The same results would be expected if Wald tests on the interaction terms were used for selection instead of likelihood ratio tests.
-
-%Adding item residuals $\epsilon_i$ to the analysis models would provide correct standard errors and p-values. Such a model is prohibitively difficult to fit without resorting to Monte Carlo methods, though. 
-An appealing alternative is AIC, defined as
-\begin{equation} \label{eq:aic}
-\mathrm{AIC} = \mathrm{dev_{in}} + 2k_\mathrm{AIC}
+AIC \parencite{akaike1974new} is an information criteria that estimates the expected log-likelihood of the fitted model when evaluated on new data. In the context of the model in Equation~\ref{eq:latent-reg-lltm}, it has the form
+\begin{equation} 
+	\mathrm{AIC} = -2 L(y ; \hat \sigma, \hat \gamma, \hat \beta) - 2k
 ,\end{equation}
-where $\mathrm{dev_{in}}$ is the deviance of the fitted model in the training data, and $k_\mathrm{AIC}$ is the number of model parameters. The model with the lowest value of AIC is selected.
-AIC is suitable both for comparing non-nested models, which likelihood ratio tests cannot do, and for comparing many models simultaneously, which bring up problems of multiple hypothesis for likelihood ratio tests. Further, AIC explicitly frames model selection as a trade off between model fit and complexity. \comment{Explain further, including  Kullback–-Leibler divergence.}
-The results of using AIC with the simulated datasets are presented in Figure~\ref{fig:select-overtau}. 
-%These results follow similar patterns as for selection by p-values, though a bit worse.
+where $k$ is the number of model parameters. Because the likelihood in Equation~\ref{eq:lltm-likelihood} is marginal over persons, AIC will estimate the expectation of $-2 \times \mathrm{CV}^{(P)}$.
 
-\begin{figure}[tbp]
-	\centering
-	\includegraphics{chapter_2/figs/select_overtau.pdf}
-	\caption{Proportion of times each model was selected across differing generating values for residual item standard deviation ($\tau$), shown for differing selection methods. Each simulation condition was replicated $\nreps$ times with datasets consisting of $\npersons$ persons and $\nitems$ items. Model~2 is the true model when $\tau = 0$.}
-	\label{fig:select-overtau}
-\end{figure}
 
-AIC is an approximation for holdout cross-validation, in which a model is estimated using a ``training'' dataset and then evaluated on a ``test'' dataset \comment{show Kullback-–Leibler divergence formula}. Specifically,
-\begin{equation}
-	k_\mathrm{AIC} \approx k_\mathrm{CV} = \frac{\mathrm{dev_{out}} - \mathrm{dev_{in}}}{2}
+\section{Simulation study 1: The effect of the quality of item predictors}
+
+In each replication of this simulation, the doubly explanatory model is used to generate a training dataset and two holdout datasets: one containing new persons (new random draws of $\zeta_p$) and another containing new items (new random draws of $\epsilon_i$). 
+Then competing models are fit to the training data, and AIC is calculated for each.  
+Also, parameter estimates from fitted models are used to calculate $\mathrm{CV}^{(P)}$ and $\mathrm{CV}^{(I)}$ on the holdout datasets. The main quantity of interest in this simulation is the proportion of times each method selects each competing model. The generating values are as follows:
+\begin{itemize}
+	\item Number of persons is $P = 500$.
+	\item Number of items is $I= 32$.
+	\item Item covariate vectors $x_i$ are made of an intercept, three indicator variables, and one interaction.
+	\item Item-related coefficients are $\beta = \{-.5, .5, .5, .5, -.5\}$.
+	\item Item residuals have varying standard deviations, $\tau \in \{0, .1, .3, .5\}$.
+	\item Person residuals have an SD of $\sigma = 1$.
+\end{itemize}
+The values of $\tau$ are chosen to represent cases where the item covariates are perfect, very strong, moderate, or weak predictors of item difficulty, and it is the only factor to vary between simulations.
+
+The competing models are of the type in Equation~\ref{eq:latent-reg-lltm} and as such do not include item residuals. They differ from one another only in terms of the specification of $x_i'\beta$. For Model~1
+\begin{equation} 
+	x_i'\beta \equiv \beta_0 + \beta_1 x_{1i} + \beta_2 x_{2i} + \beta_3 x_{3i}
 ,\end{equation}
-where $\mathrm{dev_{out}}$ is the deviance of the model in the test data given parameter estimates obtained from the training data. 
-\comment{Equation is vague. Is it for one application of CV, or a long run quantity. Refer to Kuha paper.}
-For the LLTM, $k_\mathrm{AIC}$ approximates the $k_\mathrm{CV}$ that results from test data consisting of a new sample of persons responding to the same items, or in other words, cross-validation over persons. \comment{Explain why, from chapter 1 or cite papers.} 
-%$2k$ in Equation~\ref{eq:aic} may be viewed as an adjustment to the deviance of the model fit to the training data owing to uncertainty in the parameter estimates. 
+for Model~2
+\begin{equation} 
+	x_i'\beta \equiv \beta_0 + \beta_1 x_{1i} + \beta_2 x_{2i} + \beta_3 x_{3i} + 
+		\beta_4 x_{1i} x_{2i}
+,\end{equation}
+and for Model~3
+\begin{equation} 
+	x_i'\beta \equiv \beta_0 + \beta_1 x_{1i} + \beta_2 x_{2i} + \beta_3 x_{3i} + 
+		\beta_4 x_{1i} x_{2i} + \beta_5 x_{2i} x_{3i}
+.\end{equation}
+Model~2 contains the correct choice of predictors, and in conditions where $\tau=0$ it matches the generating model. Otherwise, the competing models are only approximations to the true model.
 
-The correct values for $k_\mathrm{CV}$ from cross-validation over persons may be estimated from the simulation.
-This is presented in the left panl of Figure~\ref{fig:k-overtau}. The empirical results regarding $k_\mathrm{CV}$ are similar to those given by AIC (\aic[and]) with some variation across values for $\tau$. Importantly, the difference between models is consistently about one, which agrees with AIC.
-
-\begin{figure}[tbp]
-	\centering
-	\includegraphics{chapter_2/figs/k_overtau.pdf}
-	\caption{Estimated effective number of parameters ($k$) for the models by value of $\tau$, shown for two cross-validation methods. $k$ is the difference between the out-of-sample and in-sample deviance divided by two. AIC relies on an approximation of this quantity, in this case \aic[and], respectively. Each simulation condition was replicated $\nreps$ times with datasets consisting of $\npersons$ persons and $\nitems$ items. Model~2 is the true model when $\tau = 0$.}
-	\label{fig:k-overtau}
-\end{figure}
-
-In short, AIC performs poorly for model selection in this instance even though it accurately estimates the out-of-sample deviance. Further, cross-validation with new persons also performs poorly, as depicted in Figure~\ref{fig:k-overtau}. Lastly, BIC performs somewhat better but has the same problem. BIC is associated with $k_\mathrm{BIC}$ being \bic[and] for the three models. \comment{Discuss BIC.}
+Preliminary results indicate that AIC and cross-validation over persons perform similarly in terms of the proportion of times each model is selected. Further, comparing $\mathrm{CV}^{(P)}$ to $L(y ; \hat \sigma, \hat \gamma, \hat \beta)$ to obtain an empirical estimate of $k$ supports the accuracy of the penalty employed by AIC. Both approaches perform poorly when $\tau > .1$, however, indicating that neither is appropriate for selecting item covariates. Cross-validation over items is the only method to select Model~2 more often then Models~1 or 3 when $\tau > .1$, but it succeeded in doing so only in only 40 to $65\%$ of replications, depending on $\tau$.
 
 
-\subsection{Holdout cross-validation for item predictors}
+\section{Simulation study 2: The effect of the number of items}
 
-If the focus of model selection is the choice of item predictors, cross-validation schemes based on test data with the same items are wrongheaded. A useful approach instead is to consider how the item predictors will fare for a new set of items constructed with the same item covariates. To express this, the analysis models are fit to a training dataset and then evaluated on a holdout dataset representing the same persons and new items. 
+The second simulation is very similar to the first, the only differences being that $\tau$ is fixed at .3 and that the numbers of items vary, $I \in \{32, 64, 96, 128 \}$. The expected result was that cross-validation over items would select Model~2 more often as $I$ increases, while values of $I$ would have little effect on selection with AIC or cross-validation over persons.
 
-Figure~\ref{fig:select-overtau} provides the proportion of times each model was selected using this scheme. 
-Figure~\ref{fig:k-overtau} provides $k_\mathrm{CV}$ under this scheme.
-%Across all conditions, Model~2 is selected the majority of times. For $I=32$ items, larger values of $\tau$ are associated with a lower selection proportion for Model~2, while this trend is mitigated when $I=128$.
+Preliminary results suggest that cross-validation over items does perform better with greater numbers of items, but the percentage of times Model~2 is selected only grows from 55 to $65\%$. As expected, results for AIC and cross-validation over persons do not vary with the number of items.
 
 
-\subsection{Pairwise model comparisons}
+\section{Notes}
 
-To examine selection more closely, Models~1 and 3 are separately compared against Model~1. This is shown in Figure~\ref{fig:pairwise-model1} and Figure~\ref{fig:pairwise-model3}.
+\subsection{About the simulations}
 
-\begin{figure}[tbp]
-	\centering
-	\includegraphics{chapter_2/figs/twoway_model1.pdf}
-	\caption{Difference in cross-validation statistics between Model~1 and Model~2 by value of $\tau$. Values to the left of the dashed line indicate instances in which Model~1 is selected over Model~2. Percentage of distibution on either side is shown.}
-	\label{fig:pairwise-model1}
-\end{figure}
+I believe that there is a big problem with using the log-likelihood of a clearly misspecified model as a loss-function in CV. This is my intuition. The narrative should probably be that none of methods work with the misspecified LLTM, including the correct holdout validation scheme (over items). I don't think there is a lot to be learned from the simulations other than that methods aren't working, and so I don't think it is necessary to show all these differing conditions and make a lot of interpretations.
 
-\begin{figure}[tbp]
-	\centering
-	\includegraphics{chapter_2/figs/twoway_model3.pdf}
-	\caption{Difference in cross-validation statistics between Model~3 and Model~2 by value of $\tau$. Values to the left of the dashed line indicate instances in which Model~3 is selected over Model~2. Percentage of distibution on either side is shown.}
-	\label{fig:pairwise-model3}
-\end{figure}
+I think instead it makes more sense to demonstrate a reasonable approach, which is to fit the Rasch model and then perform CV on the Rasch difficulties using a meta-analysis regression. The meta-analysis part can be done with \texttt{sem} in Stata, I think, so it isn't too exotic to propose for people to actually do in practice.
 
-Model~1 versus Model~2:
-\begin{itemize}
-	\item \emph{AIC}. As the two models each differ by only one parameter, the deviance for Model~2 must be smaller by two than Model~1 to be selected. AIC almost always selects Model~2 over Model~1.
-	\item \emph{BIC}. The deviance for Model~2 must be smaller by 4.84, a larger ``penalty.'' In regards to Figure~\ref{fig:pairwise-model1}, this results in distributions of the difference shifted further to the left compared to AIC, but otherwise the distributions are similar to the corresponding ones for AIC. The penalty seems too much, as BIC fails to reject Model~1 more often than AIC. This discrepancy increases with $\tau$.
-	\item \emph{CV over persons}. As shown in Figure~\ref{fig:k-overtau}, the penalty in cross-validation over persons corresponds well to the penalty associated with AIC. Unsurprising, the results are quite similar to those for AIC.
-	\item \emph{CV over items}. This method seems to function well when $\tau$ is small but more poorly than the others otherwise.
-	\item \emph{Likelihood ratio test}. A likelihood ratio test using a $\chi^2$ distribution with one degree of freedom will give a statistically significant result at the .05 level for a value of 3.84 or greater. This 3.84 may be thought of as the penalty implied by the likelihood ratio test when models differ by only one parameter. This value is close enough to that of AIC that they would be indistinguishable in Figure~\ref{fig:pairwise-model1}.
-\end{itemize}
-
-Model~3 versus Model~2:
-\begin{itemize}
-	\item \emph{AIC}. AIC tends to reject Model~3 when $\tau$ is low but fails for larger values of $\tau$.
-	\item \emph{BIC}. 
-	\item \emph{CV over persons}. This method again closely matches AIC.
-	\item \emph{CV over items}. This method rejects Model~3 the majority of the time, and the results are consistent across values of $\tau$. It is the only method to reject Model~3 when $\tau$ is .3 or .5.
-	\item \emph{Likelihood ratio test}. 
-\end{itemize}
+I'm also considering changing the item predictors: $x_1$ would be continuous, and $x_2$ and $x_3$ would be dummy variables. Then the interactions $x_1 x_2$ and $x_1 x_3$ would be considered in the candidate models. This would make for a more informative set of covariates and may lead to  results that are more encouraging.
 
 
-\section{Simulation~2}
+\subsection{About AIC}
 
-The effect of different numbers of items are considered.
-Datasets consisting of $P = \npersons$ persons and $I \in \{\nitemsoveritems\}$ items are generated with values of $\tau$ fixed at $\gentauoveritems$. The simulation is carried out for $\nreps$ replications for each value of $I$.
-Figure~\ref{fig:select-overnitems} shows the proportion of times each model is selected depending on the number of items. Figure~\ref{fig:k-overnitems} provides empirical estimates of the effective number of parameters.
+The description below is taken from \textcite{burnham2003model}. The notation here is unrelated to that in the rest of the chapter.
 
-\begin{figure}[tbp]
-	\centering
-	\includegraphics{chapter_2/figs/select_overnitems.pdf}
-	\caption{Proportion of times each model was selected depending on the number of items, shown for differing selection methods. Each simulation condition was replicated $\nreps$ times with datasets consisting of $\npersons$ persons and with $\tau = .3$.}
-	\label{fig:select-overnitems}
-\end{figure}
+Kullback-Leibler information (or distance) is
+\begin{equation}
+	I(f,g) = \int f(x) \log \left ( \frac{f(x)}{g(x|\theta)} \right ) ~dx
+\end{equation}
+where $f$ is the true distribution function, $g$ is the model distribution function, $x$ is a dataset, and $\theta$ is the model parameters. This is the ``information lost when $g$ is used to approximate $f$.'' The above is for continuous distributions, and the authors provide a separate equation for discrete distributions. Further, $I(f,g)$ may be rewritten as
+\begin{equation}
+	I(f,g) = \int f(x) \log f(x) ~dx - \int f(x) \log g(x|\theta) ~dx
+\end{equation}
+and then
+\begin{equation}
+	I(f,g) = \mathrm{E}_f[\log f(x)] - \mathrm{E}_f[\log g(x|\theta)]
+\end{equation}
+and then
+\begin{equation}
+	I(f,g) = C - \mathrm{E}_f[\log g(x|\theta)]
+\end{equation}
+where $C$ is a constant, usually unknown or ignored, that does not depend on choice of model $g$. In this way, $\mathrm{E}_f[\log g(x|\theta)]$ is \emph{relative} distance.
 
-\begin{figure}[tbp]
-	\centering
-	\includegraphics{chapter_2/figs/k_overnitems.pdf}
-	\caption{Estimated effective number of parameters ($k$) for the models by number of items, shown for two cross-validation methods. $k$ is the difference between the out-of-sample and in-sample deviance divided by two. AIC relies on an approximation of this quantity, in this case \aic[and], respectively. Each simulation condition was replicated N times with datasets consisting of N persons and with $\tau = .3$}
-	\label{fig:k-overnitems}
-\end{figure}
+The target quantity for AIC is the ``relative expected K-L distance''
+\begin{equation}
+	\mathrm{E}_y \mathrm{E}_x [\log( g(x | \hat \theta(y)) )]
+\end{equation}
+where $x$ and $y$ are independent datasets (not independent and dependent variables) drawn from an unknown true distribution $f$ and $\hat \theta(y)$ are MLE parameter estimates resulting from the fit of the model to $y$. 
+(\cite{Kuha2004}, page 206, explains that the double expectation results from ``assuming the MLE is based on a separate, independent sample of data...'')
+Both expectations are effectively taken with respect to $f$ (page 60). $\hat \theta(y)$ differs from the psuedo-true parameter values $\theta_0$ for model $g$, and $g(x | \hat \theta_0)$ minimizes the K-L distance (in comparison to other values for $\theta$). The ``key result'' is
+\begin{equation}
+	\mathrm{E}_y \mathrm{E}_x [\log( g(x | \hat \theta(y)) )] \approx
+	\log( L(\hat \theta | data ) ) - K
+\end{equation}
+where $L(\hat \theta| data)$ is the log-likelihood of the fitted model and $K$ is the ``number of estimable parameters''. $K$ results from the use of $\hat \theta(y)$ instead of $\theta_0$, or in other words, due to the uncertainty in the estimated parameters. AIC is
+\begin{equation}
+	\mathrm{AIC} = -2 \log(  L(\hat \theta|y)  ) + 2K
+.\end{equation}
+AIC is used to select the model that minimizes the ``expected value of this (conceptually) estimated K-L information'' (page 363):
+\begin{equation}
+	\mathrm{E}_y \left [ I(f, g(\cdot | \hat \theta (y) )) \right ]
+.\end{equation}
 
-\section{Discussion}
+My interpretations: In the previous paragraph, there is an abrupt switch from 
+	$\log( L(\hat \theta | data ) )$  
+to
+	$\log( L(\hat \theta | y ) )$, which are presumably the same quantity.
+This is how it goes in the chapter (page 61), and the switch is confusing and unexplained. 
 
-\comment{Find papers on choosing between LLTMS. (1) K-fold CV. (2) Consider a linear model to parallel holdout CV with new items. Possible to get marginal likelihood with linear model? (3) Show that AIC works with ``De Boeck'' version of model. (4) Consider extending topic to include linear crossed mixed-effects models.}
+Also, because the expectations above are taken over data $y$ in 
+	$\mathrm{E}_y \mathrm{E}_x [\log( g(x | \hat \theta(y)) )]$, 
+I believe AIC is not conditional on the parameter estimates from the available data. Adopting a cross-validation viewpoint, I would say that
+	$\mathrm{E}_y \mathrm{E}_x [\log( g(x | \hat \theta(y)) )]$
+represents the expected cross-validation log-likelihood, where a model is trained on $y$ and evaluated on $x$. Further, AIC approximates this quantity (times $-2$).
 
-%\bibliographystyle{apacite}
-%\bibliography{../../Documents/References/references}
+\textcite{stone1977asymptotic} is credited (for example, by \cite{Hastie2009}) with showing that AIC is asymptotically equivalent to leave-one-out cross-validation. The paper it self is short but difficult to follow; it's mainly a mathematical proof lacking discussion.
 
-\end{document} 
+\textcite{Kuha2004} describes the ``asymptotic efficiency'' of AIC: ``the expected mean squared error of predictions from models selected by it is the smallest possible in large samples.'' I interpret this to mean that AIC selects the best available approximation to the true model. BIC does not share this characteristic. BIC is consistent: ``the probability of selecting the true model from a set of candidates tends to 1 as $n$ increases if the true model is one of the models under consideration and the true parameter value $\theta*$ remains fixed'' (see references in \cite{Kuha2004}, page 217).
+
+\textcite{Kuha2004} motivates AIC in terms of the K-L distance and connects this to cross-validation. \textcite{burnham2003model} do not connect AIC to cross-validation, while \textcite{Hastie2009} present AIC as a correction to the in-sample likelihood due to overfitting.
+
+\textcite{Kuha2004} (page 208) lists two requirements for AIC to be a good estimate. First, the sample sized is assumed to be large. Corrections for small samples exist, but must be derived for every model type. Second, the models are true (or that the smaller model in a nested comparison is true). This is because the AIC penalty (the 2) is a property of the true distribution. For untrue models, AIC is biased but has zero variance. ``Other, less biased, estimates for the same quanityt exist, but their variances must also be larger. Thus, the constant estimate used in $\mathrm{AIC}_e$, besides being trivial to calculate, is likely to have a lower mean quared error thant alternatives in many models in which its assumptions are at least roughly satisfied.
+
+\textcite{fang2011asymptotic} shows, in the context of linear mixed effects models, that ``the marginal Akaike information criterion is asymptotically equivalent to the leave-one-cluster-out cross-validation and the conditional Akaike information criterion is asymptotically equivalent to the leave-one-observation-out cross-validation.''
 
 
+\subsection{Cross-validation}
 
+I should adopt the language ``holdout validation'' and drop ``holdout cross-validation'', as ``cross-validation'' seems to apply to $k$-fold, LOO, bootstrap CV, and the like. Nothing is ``crossed'' in holdout validation.
 
+\textcite{Hastie2009} suggest that there are two possible goals: model selection (choosing the best predictor) and model assessment (estimating the prediction error). In a data-rich situation, they say that a three part validation scheme is ideal: models are estimated in the ``training'' set, chosen based on loss in the ``validation'' set, and the prediction error for the final model is estimated on the ``test'' set. Single-dataset approaches (IC and CV) approximate the validation step.
 
+\emph{I think} that the error in the test dataset is an estimate of the conditional prediction error (conditional on the trained/fitted model), and that the error in the validation dataset is also a (potentially biased) estimate of the same. \emph{I think} that holdout validation is in this way different from single-dataset approaches like information criteria, $k$-fold CV, and leave-one-out CV. ``It does not seem possible to estimate conditional error effectively, given only the information in the same training set'' (\cite{Hastie2009}, page 220).
 
- %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\textcite{Hastie2009} say that CV approximates the expected test error. They provide a brief and not very clear discussion of whether cross-validation estimates the ``conditional test error''. They do a brief simulation comparing $k$-fold CV ($k=10$) and leave-one-out CV and conclude that neither estimates the conditional test error well. They also conclude that both ``are approximately unbiased for expected [test] error, but the variation in test error for different training sets is quite substantial.'' (In other words, the estimates have high variance, I think.)
 
-\section{Cross-validation with a fixed-persons random-items model.}
+\textcite{arlot2010survey} mentions that the appeal of cross-validation methods is their universality, given that they are based on data splitting. They describe ``model selection for estimation'', which I think corresponds to estimating the expected error and choosing the model that minimizes the error. (The article relies heavily on stupid notation, so I may have to reread.) They mention efficiency and the oracle inequality (page 47). They alternative is ``model selection for identification'' (choosing the true model). The AIC-BIC dilemma (estimation versus identification) is mentioned with some probably useful references (page 48). Some papers on CV bias in the regression framework are mentioned (page 57).
 
-A variation on the three models is considered in which the persons are modeled as fixed effects and the items as random effects. The fixed part of the models include the item predictors and and indicator variable for each sum score. Person covariates are omitted. In these ``inverted'' models, the items are regarded as exchangeable rather than the persons. It is posited that AIC for the inverted models would perform correctly for cross-validation inferences that involve new items.
-
-Figure~\ref{fig:k-new-items} provides the estimated effective number of parameters for the models based on the simulations. As may be seen, the values are low in comparison with the count of parameters (\aicitem[and]) and dependent on $\tau$. Figure~\ref{fig:select-aicitem} shows the proportion of times each inverted model was selected using AIC.
-
-\begin{figure}[tbp]
-	\centering
-	\includegraphics[height=3in, trim = 1mm 1mm 1mm 1mm, clip=true]
-	{chapter_2/figs/p_newitems.pdf}
-	\caption{Estimated effective number of parameters for models fit to test data consisting of the same persons responding to new items.}
-	\label{fig:k-new-items}
-\end{figure}
-
-\begin{figure}[tbp]
-	\centering
-	\includegraphics[height=3.5in, trim = 1mm 1mm 1mm 1mm, clip=true]
-	{chapter_2/figs/select_aic2.pdf}
-	\caption{Proportion of times each model was selected using AIC with the ``inverted'' models.}
-	\label{fig:select-aicitem}
-\end{figure}
-
+\textcite{arlot2010survey} discuss the merits of CV versus ``penalized criteria'' (page 71). ``The strongest argument for CV is its quasi-universality: Provided data are i.i.d., CV yields good model selection performances in (almost) any framework. Nevertheless, universality has a price: Compared to procedures designed to be optimal in a specific framework (like AIC), the model selection performances of CV can be less accurate, while its computational cost is higher.'' Later: ``More generally, because of its versatility, CV should be prefered to any model selection procedure relying on assumptions which are likely to be wrong.''
 

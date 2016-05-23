@@ -1,0 +1,277 @@
+\documentclass[letterpaper]{article}
+\usepackage[left=1.00in, right=1.00in, top=1.00in, bottom=1.00in]{geometry}
+
+\usepackage{amsmath}
+\usepackage{apacite}
+\usepackage{enumitem}
+\setlist{noitemsep} 
+
+\title{Bayesian and frequentist cross-validation methods for clustered and cross-clustered data \\ \large{Dissertation proposal} }
+\author{Daniel Furr}
+\date{April 14th, 2016}
+
+\begin{document}
+
+\maketitle
+
+
+\section{Chapter 1: Cross-validation for clustered and cross-clustered data}
+
+The first chapter will make the argument that cross-validation for clustered data requires consideration of what new data would be collected to support the desired inference, even when single dataset approximations like information criteria or $k$-fold cross-validation are used. 
+In addition, it will introduce the ``doubly explanatory'' item response model as the motivating example to be used throughout the dissertation.
+%Item response data by nature are always cross-classified; item responses are simultaneously nested both within persons and within items. 
+This chapter lays further groundwork for the remaining chapters in a few other respects. First, it describes differing ways that cross-validation may be conducted and links these to
+the inferences they support. Also, it frames the model in both frequentist and Bayesian terms and likewise describes the predictive quantities either paradigm employs in cross-validation.
+
+
+\subsection{The ``doubly explanatory'' item response model}
+
+The motivating example is the ``doubly explanatory'' \cite{Wilson2004} item response model:
+\begin{equation} \label{eq:eirm}
+	\Pr(y_{ip} = 1 | w_p, x_i, \zeta_p, \epsilon_i) =
+	\mathrm{logit}^{-1} \left [ (w_p'\gamma + \zeta_p) -
+	                            (x_i'\beta + \epsilon_i) \right ]
+\end{equation}
+\begin{equation}
+\zeta_p \sim \mathrm{N}(0, \sigma^2)
+\end{equation}
+\begin{equation}
+\epsilon_i \sim \mathrm{N}(0, \tau^2)
+\end{equation}
+where $y_{ip} = 1$ if person $p$ ($p = 1, \dotsc, P$) responded to item $i$ ($i = 1, \dotsc, I$) correctly and $y_{ip} = 0$ otherwise. The quantity $w_p'\gamma + \zeta_p$ is a latent regression of person ability; $w_p$ is a vector of person covariates, $\gamma$ is a vector of regression coefficients, and $\zeta_p$ is a residual. Similarly, $x_i'\beta + \epsilon_i$ is a latent regression of item difficulty in which $x_i$ is a vector of item covariates, $\beta$ is a vector of regression coefficients, and $\epsilon_i$ is a residual. The model may be understood as a generalization of the Rasch model \cite{Rasch1960a} that decomposes the Rasch model ability and difficulty parameters into structural parts ($w_p'\gamma$ and $x_i'\beta$) and residual parts ($\zeta_p$ and $\epsilon_i$). The doubly explanatory explanatory model is quite general and encompasses many Rasch-family item response models.
+
+Estimating the model using marginal maximum likelihood methods is infeasible, given the need to simultaneously integrate over $\zeta_p$ and $\epsilon_i$ when calculating the likelihood. The usual model for studying the effects of item predictors, the linear logistic test model \cite{Fischer1973}, omits $\epsilon_i$, making the integration tractable. This approach is treated in depth in Chapter~2. On the other hand, the doubly explanatory model is easily estimated using Markov chain Monte Carlo (MCMC) methods, as is done in Chapter~3.
+
+
+\subsection{Bayesian and frequentist approaches to the doubly explanatory model}
+
+This section will compare Bayesian and frequentist modeling approaches, using the doubly explanatory model as an example. Discussion of the Bayesian approach will include:
+\begin{itemize}
+	\item differing types of parameters (``regular'' parameters, hyper-parameters, and arbitrary posterior quantities), 
+	\item expressions for the posterior distribution, 
+	\item prior distributions, and 
+	\item hierarchical centering. 
+\end{itemize}
+Discussion of the frequentist approach will include:
+\begin{itemize}
+	\item the generalized linear mixed model framework,
+	\item marginal maximum likelihood estimation,
+	\item the distinction between ``fixed'' and ``random'' effects, and
+	\item (approximate) means of estimating cross-mixed effects models.
+\end{itemize}
+
+
+\subsection{Holdout cross-validation schemes}
+
+Performing holdout cross-validation requires a second dataset, perhaps from a separate data collection. The holdout dataset may involve a new sample of persons responding to the same set of items, which I term cross-validation \emph{over persons}. Alternatively, it may consist of a new set of items administered to the same persons, which I call cross-validation \emph{over items}. The former is useful for choosing among models with differing person covariates, and the latter is useful for choosing among models with differing item covariates.
+
+Rather than collect a second dataset, a researcher may instead partition the available data, for example forming ``training'' and ``test'' halves or conducting $k$-fold cross-validation. In doing so, the researcher must consider whether cross-validation over persons or over items (or some other approach) is appropriate and partition the data in accordance with that choice.
+Further, when constructing a likelihood for the purpose of using information criteria, the likelihood should be marginal in regards to whichever set of clusters cross-validation is to be performed over. Because of this, the ``default'' ways of calculating information criteria may not fit the desired inference. Chapters~2 and 3 are largely investigations of this issue.
+
+\subsection{Predictive quantities}
+
+Inferences regarding several facets of the model may be of interest:
+\begin{itemize}
+	\item residuals ($\zeta_p$ and $\epsilon_i$),
+	\item clusters ($w_p'\gamma + \zeta_p$ and $x_i'\beta + \epsilon_i$),
+	\item responses ($y_{ip}$), and
+	\item likelihood.
+\end{itemize}
+Each of these may be considered for the existing dataset or for new (holdout) data. The statistical framework (frequentist or Bayesian) will determine the particular form for each of these quantities as well as whether they are thought of as estimates or predictions. Predictions for new responses are useful for model criticism (in particular for posterior predictive model checking), while predictions regarding the likelihood are useful for cross-validation. This portion of Chapter~1 may introduce the predictive pointwise density and marginal variation of it (though in this proposal they are presented as a part of Chapter~3).
+
+
+\section{Chapter 2: Frequentist approaches to cross-validation with the doubly explanatory model}
+
+This chapter investigates how well cross-validation performs within the frequentist framework using maximum likelihood estimation, specifically for the purpose of selecting among models with differing sets of item covariates. With this estimation method, the item residuals in Equation~\ref{eq:eirm} are commonly omitted from the model to make calculation of the marginal likelihood tractable. This chapter shows that AIC \cite{akaike1974new} corresponds to cross-validation over persons and then goes on to shows that AIC and holdout cross-validation over persons both perform poorly in this instance.
+
+\subsection{Model and methods}
+
+Fitting the doubly explanatory model in Equation~\ref{eq:eirm} using marginal maximum likelihood is infeasible. Instead, the analysis models will be of the form:
+\begin{equation} \label{eq:latent-reg-lltm}
+	\Pr(y_{ip} = 1 | w_p, x_i, \zeta_p) =
+	\mathrm{logit}^{-1} \left [ (w_p'\gamma + \zeta_p) - x_i'\beta \right ]
+\end{equation}
+\begin{equation}
+	\zeta_p \sim \mathrm{N}(0, \sigma^2)
+\end{equation}
+Here the item residual for $\epsilon_i$ is omitted. This is a variation on the linear logistic test model, which is used to study the factors associated with the difficulty of items. The log-likelihood is
+\begin{equation} \label{eq:lltm-likelihood}
+	L(y ; \hat \sigma, \hat \gamma, \hat \beta) = 
+	\sum_{p=1}^P \log
+	\int \prod_{i=1}^I
+		p(y_{ip} | \hat \gamma, \hat \beta, \zeta_p)
+		p(\zeta_p | \hat \sigma)
+	~d \zeta_p
+\end{equation}
+which is readily estimated as a generalized linear mixed model \cite{Rijmen2003}.
+
+Let $\tilde y$ represent response data from a holdout dataset, which may involve new persons or new items.
+Then using the log-likelihood as the score function, $L(\tilde y ; \hat \sigma, \hat \gamma, \hat \beta)$ represents the fit of a model with parameter estimates from the original data evaluated in the holdout data. I will use the notation $\mathrm{CV}^{(P)}$ to represent $L(\tilde y ; \hat \sigma, \hat \gamma, \hat \beta)$ when $\tilde y$ arises from new persons and $\mathrm{CV}^{(I)}$ when it arises from new items. When a holdout dataset is available, $\mathrm{CV}^{(P)}$ or $\mathrm{CV}^{(I)}$ may be used to select among competing models.
+
+AIC \cite{akaike1974new} is an information criteria that estimates the expected log-likelihood of the fitted model when evaluated on new data. In the context of the model in Equation~\ref{eq:latent-reg-lltm}, it has the form
+\begin{equation} 
+	\mathrm{AIC} = -2 L(y ; \hat \sigma, \hat \gamma, \hat \beta) - 2k
+,\end{equation}
+where $k$ is the number of model parameters. Because the likelihood in Equation~\ref{eq:lltm-likelihood} is marginal over persons, AIC will estimate the expectation of $-2 \times \mathrm{CV}^{(P)}$.
+
+
+\subsection{Simulation study 1: The effect of the quality of item predictors}
+
+In each replication of this simulation, the doubly explanatory model is used to generate a training dataset and two holdout datasets: one containing new persons (new random draws of $\zeta_p$) and another containing new items (new random draws of $\epsilon_i$). 
+Then competing models are fit to the training data, and AIC is calculated for each.  
+Also, parameter estimates from fitted models are used to calculate $\mathrm{CV}^{(P)}$ and $\mathrm{CV}^{(I)}$ on the holdout datasets. The main quantity of interest in this simulation is the proportion of times each method selects each competing model. The generating values are as follows:
+\begin{itemize}
+	\item Number of persons is $P = 500$.
+	\item Number of items is $I= 32$.
+	\item Item covariate vectors $x_i$ are made of an intercept, three indicator variables, and one interaction.
+	\item Item-related coefficients are $\beta = \{-.5, .5, .5, .5, -.5\}$.
+	\item Item residuals have varying standard deviations, $\tau \in \{0, .1, .3, .5\}$.
+	\item Person residuals have an SD of $\sigma = 1$.
+\end{itemize}
+The values of $\tau$ are chosen to represent cases where the item covariates are perfect, very strong, moderate, or weak predictors of item difficulty, and it is the only factor to vary between simulations.
+
+The competing models are of the type in Equation~\ref{eq:latent-reg-lltm} and as such do not include item residuals. They differ from one another only in terms of the specification of $x_i'\beta$. For Model~1
+\begin{equation} 
+	x_i'\beta \equiv \beta_0 + \beta_1 x_{1i} + \beta_2 x_{2i} + \beta_3 x_{3i}
+,\end{equation}
+for Model~2
+\begin{equation} 
+	x_i'\beta \equiv \beta_0 + \beta_1 x_{1i} + \beta_2 x_{2i} + \beta_3 x_{3i} + 
+		\beta_4 x_{1i} x_{2i}
+,\end{equation}
+and for Model~3
+\begin{equation} 
+	x_i'\beta \equiv \beta_0 + \beta_1 x_{1i} + \beta_2 x_{2i} + \beta_3 x_{3i} + 
+		\beta_4 x_{1i} x_{2i} + \beta_5 x_{2i} x_{3i}
+.\end{equation}
+Model~2 contains the correct choice of predictors, and in conditions where $\tau=0$ it matches the generating model. Otherwise, the competing models are only approximations to the true model.
+
+Preliminary results indicate that AIC and cross-validation over persons perform similarly in terms of the proportion of times each model is selected. Further, comparing $\mathrm{CV}^{(P)}$ to $L(y ; \hat \sigma, \hat \gamma, \hat \beta)$ to obtain an empirical estimate of $k$ supports the accuracy of the penalty employed by AIC. Both approaches perform poorly when $\tau > .1$, however, indicating that neither is appropriate for selecting item covariates. Cross-validation over items is the only method to select Model~2 more often then Models~1 or 3 when $\tau > .1$, but it succeeded in doing so only in only 40 to $65\%$ of replications, depending on $\tau$.
+
+
+\subsection{Simulation study 2: The effect of the number of items}
+
+The second simulation is very similar to the first, the only differences being that $\tau$ is fixed at .3 and that the numbers of items vary, $I \in \{32, 64, 96, 128 \}$. The expected result was that cross-validation over items would select Model~2 more often as $I$ increases, while values of $I$ would have little effect on selection with AIC or cross-validation over persons.
+
+Preliminary results suggest that cross-validation over items does perform better with greater numbers of items, but the percentage of times Model~2 is selected only grows from 55 to $65\%$. As expected, results for AIC and cross-validation over persons do not vary with the number of items.
+
+
+\section{Chapter 3: Bayesian approaches to cross-validation with the doubly explanatory model}
+
+The final chapter takes advantage of the Bayesian framework to implement effective (I expect) methods for the selection of item covariates. 
+With MCMC methods, the doubly explanatory model may be estimated maintaining both the person and item residuals, and recently developed Bayesian cross-validation approximations are readily calculated from the conditional likelihood given these residuals after MCMC simulation. 
+However, these approximations correspond to a cross-validation scheme in which holdout data include new responses from the same persons and same items. 
+For inferences requiring, for example, cross-validation over items, I will show that a marginal variation of these approximations is superior (I expect).
+The methods are first introduced for a simpler model and are then extend to the doubly explanatory model.
+
+
+\subsection{WAIC and Bayesian LOO}
+
+As a simple example, consider a hierarchical model (not cross-clustered) in which a response $y_{jk}$ has a likelihood, 
+$p(y_{jk} | \theta_k)$, 
+that is conditional on a cluster-specific parameter $\theta_k$. This parameter has a hierarchical prior,
+$\theta_k \sim \mathrm{N}(0, \psi)$, and in turn the variance has as a prior
+$\psi \sim \mathrm{log~N}(0, 1)$, an arbitrary choice. For Bayesian cross-validation, the pointwise predictive density is defined as the conditional likelihood integrated over the posterior distributions of all parameters. For the simple example, this quantity is
+\begin{equation} 
+	\mathrm{PD}_{jk} = 
+	\iint
+		p(y_{jk} | \theta_k)
+		p(\theta_k | D, \psi)
+		p(\psi | D)
+	~d \theta_k d \psi
+,\end{equation}
+where $D$ represents all the data, in this case merely the complete response vector.
+The log of $\mathrm{PD}_{jk}$ may be summed across observations to calculate a full data log-likelihood.
+In an MCMC simulation with $S$ posterior draws, this quantity may be evaluated at each posterior draw $s$ as
+\begin{equation} 
+	\mathrm{PD}_{jk}^{(s)} = 
+	p(y_{jk} | \theta_k^{(s)})
+	p(\theta_k^{(s)} | D, \psi^{(s)})
+	p(\psi^{(s)} | D)
+,\end{equation}
+where $\theta_k^{(s)}$ represents the posterior draw of $\theta_k$ at MCMC iteration $s$ and likewise for $\psi^{(s)}$.
+$\mathrm{PD}_{jk}^{(s)}$ may be aggregated across draws to estimate the posterior distribution of $\mathrm{PD}_{jk}$. Usually this topic is discussed in terms of the \emph{log} pointwise predictive density (for example, \citeNP{gelman2014understanding}), but breaking from this norm simplifies some notation that follows.
+
+Keeping with the simple example, WAIC \cite{watanabe2010asymptotic}, a Bayesian information criteria, is defined as
+\begin{equation} \label{eq:waic}
+	\mathrm{WAIC} = 
+		\sum_{k=1}^K \sum_{j=1}^J \log  
+			\left (\frac{1}{S} \sum_{s=1}^{S} \mathrm{PD}_{jk}^{(s)} \right ) -
+		\sum_{k=1}^K \sum_{j=1}^J V_{s=1}^{S} 
+			\left ( \log \mathrm{PD}_{jk}^{(s)} \right )
+\end{equation}
+where $V_{s=1}^{S}$ represents the sample variance.
+Like other information criteria, it has the form of log likelihood minus a penalty term. The penalty term for WAIC is estimated from the variances of the log pointwise predictive densities. Although the equation shows separate summations over $j$ and $k$, the summations are only a means of aggregating over the full data and do not really reflect the nested nature of the data. WAIC bears some similarity to DIC \cite{Spiegelhalter2002} but is more stable \cite{vehtari2015efficient}.
+
+Bayesian LOO is an estimate of the $\mathrm{PD}_{jk}$ that would result from leave one out cross-validation. \citeA{gelfand1992model} propose estimating this quantity using importance sampling, and \citeA{vehtari2015efficient} propose smoothing the distribution of importance weights by fitting a generalized Pareto distribution to the upper tail of the weights.
+
+
+\subsection{Marginal forms of WAIC and Bayesian LOO}
+
+A limitation of cross-validation approximations relying on $\mathrm{PD}_{jk}^{(s)}$ is that they imply a cross-validation scheme in which the same clusters are represented in the holdout dataset. For inferences regarding cross-validation with new clusters, I propose a marginal predictive pointwise density:
+\begin{equation} \label{eq:mpd-easy}
+	\mathrm{MPD}_{k}^{(s)} = 
+	%\log 
+	\left (
+		\left [ \int
+			p(\check \theta | \psi^{(s)})
+			\prod_{j} p(y_{jk} | \check \theta)
+			~d \check \theta
+    \right ]
+		p(\psi^{(s)} | D)
+	\right )
+.\end{equation}
+The accent is placed on $\check \theta$ to indicate that it is not 
+drawn from its posterior distribution but from its ``prior'' distribution, given the posterior draw of $\psi^{(s)}$. 
+In short, the bracketed quantity is the joint likelihood of cluster $k$ integrated over $p(\check \theta | \psi^{(s)})$, which is not directly influenced by data from cluster $k$.
+This is similar to marginalizing over ``random effects'' in frequentist mixed models, except here it occurs at every posterior draw $s$. $\mathrm{MPD}_{k}^{(s)}$ may be used in place of $\mathrm{PD}_{jk}$ for calculating WAIC and Bayesian LOO when cross-validation with clusters is needed. The integration in Equation~\ref{eq:mpd-easy} has a closed form for linear models, and for models with non-linear link functions I proposed estimating it with adaptive quadrature \cite{naylor1982applications}, which has been shown to work well for models with discrete outcomes and large clusters \cite{rabe2005maximum}.
+
+Returning now to the context of the doubly explanatory model, the pointwise predictive density is
+\begin{equation} \label{eq:eirm-lpd}
+	\mathrm{PD}_{ip}^{(s)} = 
+		p(y_{ip} | \zeta_p^{(s)}, \epsilon_i^{(s)})
+		p(\zeta_p^{(s)} | D, \sigma^{(s)})
+		p(\epsilon_i^{(s)} | D, \tau^{(s)}) 
+		p(\sigma^{(s)}, \tau^{(s)} | D)
+,\end{equation}
+where $D$ again represents all the data, in this case including all responses in $y$, the person covariate matrix $W$, and the item covariate matrix $X$. For models for cross-clustered data, including the doubly explanatory model, I propose calculating the marginal pointwise predictive density in such a way as to be marginal in regard to one set of clusters but not the other. For cross-validation over persons,
+\begin{equation}
+	\mathrm{MPD}_p^{(s)} = 
+		\left [ \int
+			p(\check \zeta | \sigma^{(s)})
+			\prod_{i=1}^I	p(y_{ip} | \check \zeta, \epsilon_i^{(s)})
+			~d \check \zeta 
+		\right ]
+		p(\epsilon^{(s)} | D, \tau^{(s)}) 
+		p(\sigma^{(s)}, \tau^{(s)} | D)
+\end{equation}
+is appropriate. Here it is assumed that the same items would be administered to new person, and so the quantity is marginal only in regards to persons. On the other hand,
+\begin{equation}
+	\mathrm{MPD}_i^{(s)} = 
+		\left [ \int
+			p(\check \epsilon | \tau^{(s)})
+			\prod_{p=1}^P	p(y_{ip} | \zeta^{(s)}, \check \epsilon_i)
+			~d \check \epsilon 
+		\right ]
+		p(\zeta^{(s)} | D, \sigma^{(s)}) 
+		p(\sigma^{(s)}, \tau^{(s)} | D)
+,\end{equation}
+which is marginal in regards to items, may be used for cross-validation over items.
+
+
+\subsection{Simulation study 1: Linear responses}
+
+I will conduct a simulation study, similar to those in Chapter~2, that evaluates the success that standard and marginal versions of WAIC and Bayesian LOO exhibit in selecting the correct model among models with differing item covariates. I will first use a version of the doubly descriptive model that is modified to have a continuous response variable. Doing so will allow me simultaneously study (1) how WAIC and Bayesian LOO perform when the likelihoods need not be approximated and (2) the accuracy of adaptive quadrature as compared against the exact likelihoods.
+
+Owing to the relative slowness of MCMC simulation, this simulation study will involve fewer conditions as compared to those in Chapter~2 and may not incorporate holdout cross-validation. Also, if simulation study~2 (below) is highly successful, simulation study~1 may be abbreviated or omitted. Preliminary results indicate that adaptive quadrature works very well in simpler random intercept models. Also for the random intercept model, I find that the marginal forms of WAIC and Bayesian LOO are successful in choosing the generating model in a high proportion of replications.
+
+
+\subsection{Simulation study 2: Categorical responses}
+
+The second simulation study will use the unmodified doubly explanatory model. It will track the success that standard and marginal versions of WAIC and Bayesian LOO exhibit in selecting the correct model among models with differing item covariates. It will be very similar to simulation study~1, with the only difference being the binary response variable and the use of adaptive quadrature.
+
+
+\bibliographystyle{apacite}
+\bibliography{../../Documents/References/references}
+
+\end{document}
