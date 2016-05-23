@@ -39,21 +39,28 @@ program define sim_dataset
 	
 	// Generate "fixed" and "random" parts of item difficulties
 	generate xB = `beta1' + `beta2'*x2 + `beta3'*x3 + `beta4'*x4 + `beta5'*x2*x3
-	generate epsilon = rnormal(0, `tau')
-	generate epsilon_newitems = rnormal(0, `tau')
+	generate epsilon_training = rnormal(0, `tau')
+	generate epsilon_validation = rnormal(0, `tau')
+	generate epsilon_test = rnormal(0, `tau')
 	
 	// Expand dataset to P persons and generate abilities
 	quietly: expandcl `npersons', cluster(temp_one) generate(person)
-	quietly: generate temp_theta = rnormal(0, `sigma') if item == 1
-	quietly: generate temp_theta_new = rnormal(0, `sigma') if item == 1
-	quietly: bysort person: egen theta = mean(temp_theta)
-	quietly: bysort person: egen theta_new = mean(temp_theta_new)
-
+	quietly: generate temp_theta_training = rnormal(0, `sigma') if item == 1
+	quietly: bysort person: egen theta_training = mean(temp_theta_training)
+	quietly: generate temp_theta_validation = rnormal(0, `sigma') if item == 1
+	quietly: bysort person: egen theta_validation = mean(temp_theta_validation)
+	quietly: generate temp_theta_test = rnormal(0, `sigma') if item == 1
+	quietly: bysort person: egen theta_test = mean(temp_theta_test)
+	
 	// Simulate responses
-	generate y = rbinomial(1, invlogit(theta - xB - epsilon))
-	generate y_newpersons = rbinomial(1, invlogit(theta_new - xB - epsilon))
-	generate y_newitems = rbinomial(1, invlogit(theta - xB - epsilon_new))
-	generate y_newboth = rbinomial(1, invlogit(theta_new - xB - epsilon_new))
+	generate y_sameitems = /// "Naive" training data
+		rbinomial(1, invlogit(theta_training - xB - epsilon_validation))
+	generate y_newitems = /// Better training data
+		rbinomial(1, invlogit(theta_training - xB - epsilon_training))
+	generate y_validation = ///
+		rbinomial(1, invlogit(theta_validation - xB - epsilon_validation))
+	generate y_test = ///
+		rbinomial(1, invlogit(theta_test - xB - epsilon_test))
 	
 	sort person item
 	drop _fillin temp_*
@@ -79,7 +86,7 @@ program define rmse, rclass
 	else {
 		quietly generate `delta_hat' = `predict_var' `if'
 	}
-	quietly generate `squared_error' = (-1*`delta_hat' - (xB + epsilon))^2
+	quietly generate `squared_error' = (-1*`delta_hat' - (xB + epsilon_test))^2
 	quietly summarize `squared_error'
 	return scalar rmse = sqrt(r(mean))
 	
@@ -96,43 +103,30 @@ preserve
 
 	local converge_fails = 0
 	
-	// Estimate model on training data with new persons
-	quietly melogit y_newpersons `varlist' || person:
-	if (e(converged) == 0) local ++converge_fails
-	matrix B_newpersons = e(b)
-	local cols : colfullnames B_newpersons 
-	matrix colnames B_newpersons = `=subinstr("`cols'", "_newpersons", "", .)'
-	rmse, predict_opts(xb)
-	return scalar rmse_newpersons = r(rmse)
+	// Holdout validation
+	foreach n in newitems sameitems {
+		quietly melogit y_`n' `varlist' || person:
+		predict delta_hat_`n', xb
+		rmse, predict_var(delta_hat_`n')
+		return scalar rmse_`n' = r(rmse)
+		if (e(converged) == 0) local ++converge_fails
+		matrix B_`n' = e(b)
+		local cols : colfullnames B_`n'
+		foreach m in validation test {
+			matrix B_`n'_`m' = B_`n'
+			matrix colnames B_`n'_`m' = `=subinstr("`cols'", "_`n'", "_`m'", .)'
+			quietly melogit y_`m' `varlist' || person:, asis from(B_`n'_`m') iterate(0)
+			return scalar dev_`m'_`n' = -2 * e(ll)
+		}
+	}
 	
-	// Estimate model on training data with new items
-	quietly melogit y_newitems `varlist' || person:
-	if (e(converged) == 0) local ++converge_fails
-	matrix B_newitems = e(b)
-	local cols : colfullnames B_newitems 
-	matrix colnames B_newitems = `=subinstr("`cols'", "_newitems", "", .)'
-	rmse, predict_opts(xb)
-	return scalar rmse_newitems = r(rmse)
-	
-	// Estimate model on main dataset
-	quietly melogit y `varlist' || person:
+	// CV methods using only validation data 
+	quietly melogit y_validation `varlist' || person:
 	if (e(converged) == 0) local ++converge_fails
 	return scalar dev_insample = -2 * e(ll)
-	rmse, predict_opts(xb)
-	return scalar rmse_insample = r(rmse)
-	
-	// Get IC for insample fit
 	quietly estat ic
 	return scalar aic = el(r(S), 1, 5)
 	return scalar bic = el(r(S), 1, 6)
-	
-	// Apply new person hold out fit to main dataset
-	quietly melogit y `varlist' || person:, asis from(B_newpersons) iterate(0)
-	return scalar dev_newpersons = -2 * e(ll)
-	
-	// Apply new item hold out fit to main dataset
-	quietly melogit y `varlist' || person:, asis from(B_newitems) iterate(0)
-	return scalar dev_newitems = -2 * e(ll)
 	
 	return scalar converge_fails = `converge_fails'
 	
@@ -152,101 +146,68 @@ preserve
 	quietly summarize item
 	local I = r(max)
 
-	// Get Rasch difficulties
-	quietly melogit y ibn.item, noconstant || person:
-	if (e(converged) == 0) local ++converge_fails
-	matrix A = r(table)
-	matrix B = A[1..2, 1..`I']'
-
-	// Get Rasch difficulties from new item training data
-	quietly melogit y_newitems ibn.item, noconstant || person:
-	if (e(converged) == 0) local ++converge_fails
-	matrix A = r(table)
-	matrix B_newitems = A[1..2, 1..`I']'
-
-	// Get Rasch difficulties from new person training data
-	quietly melogit y_newpersons ibn.item, noconstant || person:
-	if (e(converged) == 0) local ++converge_fails
-	matrix A = r(table)
-	matrix B_newpersons = A[1..2, 1..`I']'
+	// Set up meta-analysis dataset
+	sort person item
+	foreach n in newitems sameitems validation test {
+		quietly melogit y_`n' ibn.item, noconstant || person:
+		if (e(converged) == 0) local ++converge_fails
+		matrix A_`n' = r(table)
+		matrix B_`n' = A_`n'[1..2, 1..`I']'
+		svmat B_`n', names(col)
+		rename (b se) (b_`n' se_`n')
+	}
+	quietly drop if b_newitems == .
 	
-	// Make dataset of Rasch difficultes
-	quietly keep if person == 1
-	keep item x2-x4 xB epsilon
-	sort item
-	svmat B_newitems, names(col)
-	rename (b se) (b_newitems se_newitems)
-	svmat B_newpersons, names(col)
-	rename (b se) (b_newpersons se_newpersons)
-	svmat B, names(col)
+	// Holdout validation meta-regression
+	foreach n in newitems sameitems {
+		quietly gsem (b_`n' <- c.se_`n'#c.M@1 `varlist'), variance(M@1)
+		if (e(converged) == 0) local ++converge_fails
+		predict delta_hat_`n', eta conditional(fixedonly)
+		rmse, predict_var(delta_hat_`n')
+		return scalar rmse_`n' = r(rmse)
+		matrix E_`n' = e(b)
+		generate tausq_`n' = el(E_`n', 1, colsof(E_`n'))
+		foreach m in validation test {
+			generate ll_`m'_`n' = ///
+				log(normalden(b_`m', delta_hat_`n', sqrt(tausq_`n' + se_`m'^2)))
+			quietly summarize ll_`m'_`n'
+			return scalar dev_`m'_`n' = -2*r(sum)
+		}
+
+	}
 	
 	// In-sample meta-regression
-	quietly gsem (b <- c.se#c.M@1 `varlist'), variance(M@1)
+	quietly gsem (b_validation <- c.se_validation#c.M@1 `varlist'), variance(M@1)
 	if (e(converged) == 0) local ++converge_fails
 	local dev_insample = -2*e(ll)
 	return scalar dev_insample = `dev_insample'
-	rmse, predict_opts(eta conditional(fixedonly))
-	return scalar rmse_insample = r(rmse)
-	
-	// TRMSEA
-	generate ll_saturated = log(normalden(0, 0, se))
-	quietly summarize ll_saturated
-	local dev_saturated = -2*r(sum)
-	local df = e(N) - e(rank)
-	return scalar rmsea = ///
-		sqrt(1/(e(N)*`df') * max(`dev_insample' - `dev_saturated' - `df', 0))
-	
-	// Get IC
 	quietly estat ic
 	return scalar aic = el(r(S), 1, 5)
 	return scalar bic = el(r(S), 1, 6)
-
-	// Holdout validation meta-regression with new items
-	quietly gsem (b_newitems <- c.se_newitems#c.M@1 `varlist'), variance(M@1)
-	if (e(converged) == 0) local ++converge_fails
-	predict delta_hat, eta conditional(fixedonly)
-	matrix E = e(b)
-	local tau2 = el(E, 1, colsof(E))
-	generate ll_newitems = ///
-		log(normalden(b, delta_hat, sqrt(`tau2' + se_newitems^2)))
-	quietly summarize ll_newitems
-	return scalar dev_newitems = -2*r(sum)
-	rmse, predict_var(delta_hat)
-	return scalar rmse_newitems = r(rmse)
-	drop delta_hat
-
-	// Holdout validation meta-regression with new items
-	quietly gsem (b_newpersons <- c.se_newpersons#c.M@1 `varlist'), variance(M@1)
-	if (e(converged) == 0) local ++converge_fails
-	predict delta_hat, eta conditional(fixedonly)
-	matrix E = e(b)
-	local tau2 = el(E, 1, colsof(E))
-	generate ll_newpersons = ///
-		log(normalden(b, delta_hat, sqrt(`tau2' + se_newpersons^2)))
-	quietly summarize ll_newpersons
-	return scalar dev_newpersons = -2*r(sum)
-	rmse, predict_var(delta_hat)
-	return scalar rmse_newpersons = r(rmse)
-	drop delta_hat
 	
 	// LOO CV meta-regression
 	quietly generate ll_loo = .
-	quietly generate delta_hat = .
 	forvalues i = 1/`I' {
-		quietly gsem (b <- c.se#c.M@1 `varlist') if item != `i', variance(M@1)
+		quietly gsem (b_validation <- c.se_validation#c.M@1 `varlist') ///
+			if item != `i', variance(M@1)
 		if (e(converged) == 0) local ++converge_fails
 		predict delta_hat_temp, eta conditional(fixedonly)
 		matrix E = e(b)
 		local tau2 = el(E, 1, colsof(E))
-		quietly replace ll_loo = ///
-			log(normalden(b, delta_hat_temp, sqrt(`tau2' + se^2))) if item == `i'
-		quietly replace delta_hat = delta_hat_temp if item == `i'
+		quietly replace ll_loo = log(normalden(b_validation, delta_hat_temp, ///
+			sqrt(`tau2' + se_validation^2))) if item == `i'
 		drop delta_hat_temp
 	}
 	quietly summarize ll_loo
 	return scalar dev_loo = -2*r(sum)
-	rmse, predict_var(delta_hat)
-	return scalar rmse_loo = r(rmse)
+	
+	// TRMSEA
+	//generate ll_saturated = log(normalden(0, 0, se))
+	//quietly summarize ll_saturated
+	//local dev_saturated = -2*r(sum)
+	//local df = e(N) - e(rank)
+	//return scalar rmsea = ///
+	//	sqrt(1/(e(N)*`df') * max(`dev_insample' - `dev_saturated' - `df', 0))
 	
 	return scalar converge_fails = `converge_fails'
 	
@@ -281,13 +242,14 @@ local m3 "x2-x4 c.x2#c.x3 c.x2#c.x4"
 
 // Prepare to store results
 postfile memhold_lltm double(seed) condition double(tau) nitems npersons model /// 
-	double(dev_insample aic bic dev_newitems dev_newpersons ///
-	rmse_insample rmse_newitems rmse_newpersons) ///
+	double(dev_insample aic bic  ///
+	dev_test_newitems dev_validation_newitems rmse_newitems ///
+	dev_test_sameitems dev_validation_sameitems rmse_sameitems) ///
 	using results_lltm_`s', replace
-postfile memhold_twostage double(seed) condition double(tau) nitems npersons ///
-	model ///
-	double(dev_insample aic bic dev_newitems dev_newpersons dev_loo ///
-	rmse_insample rmse_newitems rmse_newpersons rmse_loo rmsea) ///
+postfile memhold_twostage double(seed) condition double(tau) nitems npersons model ///
+	double(dev_insample aic bic dev_loo  ///
+	dev_test_newitems dev_validation_newitems rmse_newitems ///
+	dev_test_sameitems dev_validation_sameitems rmse_sameitems) ///
 	using results_twostage_`s', replace
 postfile memhold_errors double(seed) condition double(tau) nitems npersons ///
 	model str12(function) using results_errors_`s', replace
@@ -330,11 +292,12 @@ forvalues i = 1/`=rowsof(SIM)' {
 				(r(dev_insample)) ///
 				(r(aic)) ///
 				(r(bic)) ///
-				(r(dev_newitems)) ///
-				(r(dev_newpersons)) ///
-				(r(rmse_insample)) ///
+				(r(dev_test_newitems)) ///
+				(r(dev_validation_newitems)) ///
 				(r(rmse_newitems)) ///
-				(r(rmse_newpersons))
+				(r(dev_test_sameitems)) ///
+				(r(dev_validation_sameitems)) ///
+				(r(rmse_sameitems))
 		}
 
 		capture noisily twostage_cv `m`m''
@@ -363,14 +326,13 @@ forvalues i = 1/`=rowsof(SIM)' {
 				(r(dev_insample)) ///
 				(r(aic)) ///
 				(r(bic)) ///
-				(r(dev_newitems)) ///
-				(r(dev_newpersons)) ///
 				(r(dev_loo)) ///
-				(r(rmse_insample)) ///
+				(r(dev_test_newitems)) ///
+				(r(dev_validation_newitems)) ///
 				(r(rmse_newitems)) ///
-				(r(rmse_newpersons)) ///
-				(r(rmse_loo)) ///
-				(r(rmsea))
+				(r(dev_test_sameitems)) ///
+				(r(dev_validation_sameitems)) ///
+				(r(rmse_sameitems))
 		}
 	}
 
