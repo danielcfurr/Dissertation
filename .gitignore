@@ -1,2 +1,9 @@
 *.dta
 *.txss
+*.pdf
+*.log
+chapter_2/figs/*
+chapter_2/archive/*
+
+*.log
+*.aux

@@ -86,9 +86,14 @@ program define rmse, rclass
 	else {
 		quietly generate `delta_hat' = `predict_var' `if'
 	}
+	
 	quietly generate `squared_error' = (-1*`delta_hat' - (xB + epsilon_test))^2
 	quietly summarize `squared_error'
-	return scalar rmse = sqrt(r(mean))
+	return scalar rmse_full = sqrt(r(mean))
+	
+	quietly replace `squared_error' = (-1*`delta_hat' - (xB))^2
+	quietly summarize `squared_error'
+	return scalar rmse_fix = sqrt(r(mean))
 	
 end
 
@@ -99,35 +104,71 @@ capture program drop lltm_cv
 program define lltm_cv, rclass
 preserve
 
-	syntax varlist (fv)
+	syntax varlist (fv), [noquietly]
 
-	local converge_fails = 0
-	
-	// Holdout validation
-	foreach n in newitems sameitems {
-		quietly melogit y_`n' `varlist' || person:
-		predict delta_hat_`n', xb
-		rmse, predict_var(delta_hat_`n')
-		return scalar rmse_`n' = r(rmse)
-		if (e(converged) == 0) local ++converge_fails
-		matrix B_`n' = e(b)
-		local cols : colfullnames B_`n'
-		foreach m in validation test {
-			matrix B_`n'_`m' = B_`n'
-			matrix colnames B_`n'_`m' = `=subinstr("`cols'", "_`n'", "_`m'", .)'
-			quietly melogit y_`m' `varlist' || person:, asis from(B_`n'_`m') iterate(0)
-			return scalar dev_`m'_`n' = -2 * e(ll)
-		}
+	if ("`quietly'" == "noquietly") {
+		local quietly ""
+	}
+	else {
+		local quietly "quietly"
 	}
 	
-	// CV methods using only validation data 
-	quietly melogit y_validation `varlist' || person:
+	local converge_fails = 0
+	
+	// --- Holdout validation ---.
+	
+	foreach n in newitems sameitems {
+		
+		`quietly' melogit y_`n' `varlist' || person:
+		//rmse, predict_opts(xb)
+		//return scalar rmse_full_`n' = r(rmse_full)
+		//return scalar rmse_fix_`n' = r(rmse_fix)
+		if (e(converged) == 0) local ++converge_fails
+		matrix B_`n' = r(table)
+		matrix E_`n' = e(b)
+		
+		// Return parameter estimates
+		local cols : colnames B_`n'
+		local cols `=subinstr("`cols'", "x", "beta", .)'
+		local cols `=subinstr("`cols'", "c.", "", .)'
+		local cols `=subinstr("`cols'", "beta2#beta3", "beta5", .)'
+		local cols `=subinstr("`cols'", "beta2#beta4", "beta6", .)'
+		local cols `=subinstr("`cols'", "_cons", "beta1", 1)'
+		local cols `=subinstr("`cols'", "_cons", "sigmasq", 1)'
+		forvalues j = 1/`=colsof(B_`n')' {
+			local cname = word("`cols'", `j')
+			return scalar `=`"`cname'"' + "_est_" + `"`n'"'' = el(B_`n',1,`j')
+			return scalar `=`"`cname'"' + "_se_" + `"`n'"'' = el(B_`n',2,`j')
+		}
+		
+		// Get deviance in validation and test data
+		local cols : colfullnames E_`n'
+		foreach m in validation test {
+			matrix E_`n'_`m' = E_`n'
+			matrix colnames E_`n'_`m' = `=subinstr("`cols'", "_`n'", "_`m'", .)'
+			`quietly' melogit y_`m' `varlist' || person:, asis from(E_`n'_`m') iterate(0)
+			return scalar dev_`m'_`n' = -2 * e(ll)
+		}
+		
+	}
+	
+	// --- Insample deviance (test data only) ---
+	
+	`quietly' melogit y_test `varlist' || person:
 	if (e(converged) == 0) local ++converge_fails
-	return scalar dev_insample = -2 * e(ll)
-	quietly estat ic
+	return scalar dev_intest = -2 * e(ll)
+	
+	// --- CV methods (validation data only) ---
+	
+	`quietly' melogit y_validation `varlist' || person:
+	if (e(converged) == 0) local ++converge_fails
+	return scalar dev_invalidation = -2 * e(ll)
+
+	// Information criteria
+	`quietly' estat ic
 	return scalar aic = el(r(S), 1, 5)
 	return scalar bic = el(r(S), 1, 6)
-	
+
 	return scalar converge_fails = `converge_fails'
 	
 restore
@@ -140,65 +181,103 @@ capture program drop twostage_cv
 program define twostage_cv, rclass
 preserve
 
-	syntax varlist (fv)
+	syntax varlist (fv), [noquietly]
+	
+		if ("`quietly'" == "noquietly") {
+		local quietly ""
+	}
+	else {
+		local quietly "quietly"
+	}
 	
 	local converge_fails = 0
-	quietly summarize item
+	`quietly' summarize item
 	local I = r(max)
 
 	// Set up meta-analysis dataset
 	sort person item
 	foreach n in newitems sameitems validation test {
-		quietly melogit y_`n' ibn.item, noconstant || person:
+		`quietly' melogit y_`n' ibn.item, noconstant || person:
 		if (e(converged) == 0) local ++converge_fails
+		if ("`n'" == "validation") return scalar dev_rasch = -2*e(ll)
 		matrix A_`n' = r(table)
 		matrix B_`n' = A_`n'[1..2, 1..`I']'
 		svmat B_`n', names(col)
 		rename (b se) (b_`n' se_`n')
 	}
-	quietly drop if b_newitems == .
+	`quietly' drop if b_newitems == .
 	
 	// Holdout validation meta-regression
 	foreach n in newitems sameitems {
-		quietly gsem (b_`n' <- c.se_`n'#c.M@1 `varlist'), variance(M@1)
+		
+		`quietly' gsem (b_`n' <- c.se_`n'#c.M@1 `varlist'), variance(M@1)
+		matrix B_`n' =  r(table)
 		if (e(converged) == 0) local ++converge_fails
 		predict delta_hat_`n', eta conditional(fixedonly)
-		rmse, predict_var(delta_hat_`n')
-		return scalar rmse_`n' = r(rmse)
+		//rmse, predict_var(delta_hat_`n')
+		//return scalar rmse_full_`n' = r(rmse_full)
+		//return scalar rmse_fix_`n' = r(rmse_fix)
+		
+		// Return parameter estimates
+		local cols : colnames B_`n'
+		local cols `=regexr("`cols'", "c.se_(new|same)items#c.M", "drop")'
+		local cols `=subinstr("`cols'", "x", "beta", .)'
+		local cols `=subinstr("`cols'", "c.", "", .)'
+		local cols `=subinstr("`cols'", "beta2#beta3", "beta5", .)'
+		local cols `=subinstr("`cols'", "beta2#beta4", "beta6", .)'
+		local cols `=subinstr("`cols'", "_cons", "beta1", 1)'
+		local cols `=subinstr("`cols'", "_cons", "drop", 1)'
+		local cols `=subinstr("`cols'", "_cons", "tausq", 1)'
+		forvalues j = 1/`=colsof(B_`n')' {
+			local cname = word("`cols'", `j')
+			if ("`cname'" != "drop") {
+				return scalar `=`"`cname'"' + "_est_" + `"`n'"'' = el(B_`n',1,`j')
+				return scalar `=`"`cname'"' + "_se_" + `"`n'"'' = el(B_`n',2,`j')
+			}
+		}
+		
 		matrix E_`n' = e(b)
 		generate tausq_`n' = el(E_`n', 1, colsof(E_`n'))
 		foreach m in validation test {
 			generate ll_`m'_`n' = ///
 				log(normalden(b_`m', delta_hat_`n', sqrt(tausq_`n' + se_`m'^2)))
-			quietly summarize ll_`m'_`n'
+			`quietly' summarize ll_`m'_`n'
 			return scalar dev_`m'_`n' = -2*r(sum)
 		}
-
+		
 	}
-	
-	// In-sample meta-regression
-	quietly gsem (b_validation <- c.se_validation#c.M@1 `varlist'), variance(M@1)
+
+	// --- In-sample meta-regression (test data only) ---
+
+	`quietly' gsem (b_test <- c.se_test#c.M@1 `varlist'), variance(M@1)
 	if (e(converged) == 0) local ++converge_fails
-	local dev_insample = -2*e(ll)
-	return scalar dev_insample = `dev_insample'
-	quietly estat ic
+	return scalar dev_intest = -2*e(ll)	
+	
+	// --- CV methods (validation data only) ---
+	
+	`quietly' gsem (b_validation <- c.se_validation#c.M@1 `varlist'), variance(M@1)
+	if (e(converged) == 0) local ++converge_fails
+	return scalar dev_invalidation = -2*e(ll)
+	
+	// Information criteria
+	`quietly' estat ic
 	return scalar aic = el(r(S), 1, 5)
 	return scalar bic = el(r(S), 1, 6)
 	
 	// LOO CV meta-regression
 	quietly generate ll_loo = .
 	forvalues i = 1/`I' {
-		quietly gsem (b_validation <- c.se_validation#c.M@1 `varlist') ///
+		`quietly' gsem (b_validation <- c.se_validation#c.M@1 `varlist') ///
 			if item != `i', variance(M@1)
 		if (e(converged) == 0) local ++converge_fails
 		predict delta_hat_temp, eta conditional(fixedonly)
-		matrix E = e(b)
-		local tau2 = el(E, 1, colsof(E))
-		quietly replace ll_loo = log(normalden(b_validation, delta_hat_temp, ///
+		matrix E_loo = e(b)
+		local tau2 = el(E_loo, 1, colsof(E_loo))
+		`quietly' replace ll_loo = log(normalden(delta_hat_temp, b_validation, ///
 			sqrt(`tau2' + se_validation^2))) if item == `i'
 		drop delta_hat_temp
 	}
-	quietly summarize ll_loo
+	`quietly' summarize ll_loo
 	return scalar dev_loo = -2*r(sum)
 	
 	// TRMSEA
@@ -241,16 +320,96 @@ local m2 "x2-x4 c.x2#c.x3"
 local m3 "x2-x4 c.x2#c.x3 c.x2#c.x4"
 
 // Prepare to store results
-postfile memhold_lltm double(seed) condition double(tau) nitems npersons model /// 
-	double(dev_insample aic bic  ///
-	dev_test_newitems dev_validation_newitems rmse_newitems ///
-	dev_test_sameitems dev_validation_sameitems rmse_sameitems) ///
-	using results_lltm_`s', replace
-postfile memhold_twostage double(seed) condition double(tau) nitems npersons model ///
-	double(dev_insample aic bic dev_loo  ///
-	dev_test_newitems dev_validation_newitems rmse_newitems ///
-	dev_test_sameitems dev_validation_sameitems rmse_sameitems) ///
-	using results_twostage_`s', replace
+postfile memhold_lltm double(    ///
+		seed                     ///
+		condition                ///
+		tau                      ///
+		nitems                   ///
+		npersons                 ///
+		model                    ///
+		dev_invalidation         ///
+		aic                      ///
+		bic                      ///
+		dev_intest               ///
+		dev_test_newitems        ///
+		dev_validation_newitems  ///
+		dev_test_sameitems       ///
+		dev_validation_sameitems ///
+		beta1_est_newitems       ///
+		beta2_est_newitems       ///
+		beta3_est_newitems       ///
+		beta4_est_newitems       ///
+		beta5_est_newitems       ///
+		beta6_est_newitems       ///
+		sigmasq_est_newitems       ///
+		beta1_est_sameitems      ///
+		beta2_est_sameitems      ///
+		beta3_est_sameitems      ///
+		beta4_est_sameitems      ///
+		beta5_est_sameitems      ///
+		beta6_est_sameitems      ///
+		sigmasq_est_sameitems      ///
+		beta1_se_newitems        ///
+		beta2_se_newitems        ///
+		beta3_se_newitems        ///
+		beta4_se_newitems        ///
+		beta5_se_newitems        ///
+		beta6_se_newitems        ///
+		sigmasq_se_newitems        ///
+		beta1_se_sameitems       ///
+		beta2_se_sameitems       ///
+		beta3_se_sameitems       ///
+		beta4_se_sameitems       ///
+		beta5_se_sameitems       ///
+		beta6_se_sameitems       ///
+		sigmasq_se_sameitems       ///
+	) using results_lltm_`s', replace
+postfile memhold_twostage double(    ///
+		seed                     ///
+		condition                ///
+		tau                      ///
+		nitems                   ///
+		npersons                 ///
+		model                    ///
+		dev_invalidation         ///
+		aic                      ///
+		bic                      ///
+		dev_intest               ///
+		dev_test_newitems        ///
+		dev_validation_newitems  ///
+		dev_test_sameitems       ///
+		dev_validation_sameitems ///
+		beta1_est_newitems       ///
+		beta2_est_newitems       ///
+		beta3_est_newitems       ///
+		beta4_est_newitems       ///
+		beta5_est_newitems       ///
+		beta6_est_newitems       ///
+		tausq_est_newitems       ///
+		beta1_est_sameitems      ///
+		beta2_est_sameitems      ///
+		beta3_est_sameitems      ///
+		beta4_est_sameitems      ///
+		beta5_est_sameitems      ///
+		beta6_est_sameitems      ///
+		tausq_est_sameitems      ///
+		beta1_se_newitems        ///
+		beta2_se_newitems        ///
+		beta3_se_newitems        ///
+		beta4_se_newitems        ///
+		beta5_se_newitems        ///
+		beta6_se_newitems        ///
+		tausq_se_newitems        ///
+		beta1_se_sameitems       ///
+		beta2_se_sameitems       ///
+		beta3_se_sameitems       ///
+		beta4_se_sameitems       ///
+		beta5_se_sameitems       ///
+		beta6_se_sameitems       ///
+		tausq_se_sameitems       ///
+		dev_loo                  ///
+		dev_rasch                ///
+	) using results_twostage_`s', replace
 postfile memhold_errors double(seed) condition double(tau) nitems npersons ///
 	model str12(function) using results_errors_`s', replace
 
@@ -289,15 +448,42 @@ forvalues i = 1/`=rowsof(SIM)' {
 				(`=el(SIM, `i', colnumb(SIM, "nitems"))') ///
 				(`=el(SIM, `i', colnumb(SIM, "npersons"))') ///
 				(`m') ///
-				(r(dev_insample)) ///
-				(r(aic)) ///
-				(r(bic)) ///
-				(r(dev_test_newitems)) ///
-				(r(dev_validation_newitems)) ///
-				(r(rmse_newitems)) ///
-				(r(dev_test_sameitems)) ///
-				(r(dev_validation_sameitems)) ///
-				(r(rmse_sameitems))
+				(r(dev_invalidation         )) ///
+				(r(aic                      )) ///
+				(r(bic                      )) ///
+				(r(dev_intest               )) ///
+				(r(dev_test_newitems        )) ///
+				(r(dev_validation_newitems  )) ///
+				(r(dev_test_sameitems       )) ///
+				(r(dev_validation_sameitems )) ///
+				(r(beta1_est_newitems           )) ///
+				(r(beta2_est_newitems           )) ///
+				(r(beta3_est_newitems           )) ///
+				(r(beta4_est_newitems           )) ///
+				(r(beta5_est_newitems           )) ///
+				(r(beta6_est_newitems           )) ///
+				(r(sigmasq_est_newitems         )) ///
+				(r(beta1_est_sameitems          )) ///
+				(r(beta2_est_sameitems          )) ///
+				(r(beta3_est_sameitems          )) ///
+				(r(beta4_est_sameitems          )) ///
+				(r(beta5_est_sameitems          )) ///
+				(r(beta6_est_sameitems          )) ///
+				(r(sigmasq_est_sameitems        )) ///
+				(r(beta1_se_newitems           )) ///
+				(r(beta2_se_newitems           )) ///
+				(r(beta3_se_newitems           )) ///
+				(r(beta4_se_newitems           )) ///
+				(r(beta5_se_newitems           )) ///
+				(r(beta6_se_newitems           )) ///
+				(r(sigmasq_se_newitems         )) ///
+				(r(beta1_se_sameitems          )) ///
+				(r(beta2_se_sameitems          )) ///
+				(r(beta3_se_sameitems          )) ///
+				(r(beta4_se_sameitems          )) ///
+				(r(beta5_se_sameitems          )) ///
+				(r(beta6_se_sameitems          )) ///
+				(r(sigmasq_se_sameitems        ))
 		}
 
 		capture noisily twostage_cv `m`m''
@@ -323,16 +509,44 @@ forvalues i = 1/`=rowsof(SIM)' {
 				(`=el(SIM, `i', colnumb(SIM, "nitems"))') ///
 				(`=el(SIM, `i', colnumb(SIM, "npersons"))') ///
 				(`m') ///
-				(r(dev_insample)) ///
-				(r(aic)) ///
-				(r(bic)) ///
-				(r(dev_loo)) ///
-				(r(dev_test_newitems)) ///
-				(r(dev_validation_newitems)) ///
-				(r(rmse_newitems)) ///
-				(r(dev_test_sameitems)) ///
-				(r(dev_validation_sameitems)) ///
-				(r(rmse_sameitems))
+				(r(dev_invalidation         )) ///
+				(r(aic                      )) ///
+				(r(bic                      )) ///
+				(r(dev_intest               )) ///
+				(r(dev_test_newitems        )) ///
+				(r(dev_validation_newitems  )) ///
+				(r(dev_test_sameitems       )) ///
+				(r(dev_validation_sameitems )) ///
+				(r(beta1_est_newitems           )) ///
+				(r(beta2_est_newitems           )) ///
+				(r(beta3_est_newitems           )) ///
+				(r(beta4_est_newitems           )) ///
+				(r(beta5_est_newitems           )) ///
+				(r(beta6_est_newitems           )) ///
+				(r(tausq_est_newitems           )) ///
+				(r(beta1_est_sameitems          )) ///
+				(r(beta2_est_sameitems          )) ///
+				(r(beta3_est_sameitems          )) ///
+				(r(beta4_est_sameitems          )) ///
+				(r(beta5_est_sameitems          )) ///
+				(r(beta6_est_sameitems          )) ///
+				(r(tausq_est_sameitems          )) ///
+				(r(beta1_se_newitems           )) ///
+				(r(beta2_se_newitems           )) ///
+				(r(beta3_se_newitems           )) ///
+				(r(beta4_se_newitems           )) ///
+				(r(beta5_se_newitems           )) ///
+				(r(beta6_se_newitems           )) ///
+				(r(tausq_se_newitems           )) ///
+				(r(beta1_se_sameitems          )) ///
+				(r(beta2_se_sameitems          )) ///
+				(r(beta3_se_sameitems          )) ///
+				(r(beta4_se_sameitems          )) ///
+				(r(beta5_se_sameitems          )) ///
+				(r(beta6_se_sameitems          )) ///
+				(r(tausq_se_sameitems          )) ///
+				(r(dev_loo))                   ///
+				(r(dev_rasch))
 		}
 	}
 
