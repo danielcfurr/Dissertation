@@ -5,7 +5,7 @@ local s = 1
 // Function to simulate data ---------------------------------------------------
 
 capture program drop sim_dataset
-program define sim_dataset
+program define sim_dataset, rclass
 	
 	syntax [, nitems(integer 32) npersons(integer 500) ///
 		tau(real .5) sigma(real 1) seed(integer -1) ]
@@ -53,14 +53,36 @@ program define sim_dataset
 	quietly: bysort person: egen theta_test = mean(temp_theta_test)
 	
 	// Simulate responses
-	generate y_sameitems = /// "Naive" training data
-		rbinomial(1, invlogit(theta_training - xB - epsilon_validation))
-	generate y_newitems = /// Better training data
+	generate y_train = /// Training response data
 		rbinomial(1, invlogit(theta_training - xB - epsilon_training))
-	generate y_validation = ///
+	generate y_newitems = /// Validation data with new items
 		rbinomial(1, invlogit(theta_validation - xB - epsilon_validation))
-	generate y_test = ///
-		rbinomial(1, invlogit(theta_test - xB - epsilon_test))
+	generate y_sameitems = /// Validation data with same items
+		rbinomial(1, invlogit(theta_validation - xB - epsilon_training))
+	generate y_test = /// Test data
+		rbinomial(1, invlogit(theta_test - xB - epsilon_test))	
+	
+	// Set up meta-analysis dataset
+	local converge_fails = 0
+	quietly summarize item
+	local I = r(max)
+	sort person item
+	foreach n in train newitems sameitems test {
+		quietly melogit y_`n' ibn.item, noconstant || person:
+		if (e(converged) == 0) local ++converge_fails
+		if ("`n'" == "train") return scalar dev_rasch = -2*e(ll)
+		matrix A_`n' = r(table)
+		matrix B_`n' = A_`n'[1..2, 1..`I']'
+		svmat B_`n', names(col)
+		rename (b se) (b_`n' se_`n')
+	}
+	
+	// Get "rasch" deviance from metaanalysis
+	quietly generate ll_train = log(normalden(0, 0, se_train))
+	quietly summarize ll_train
+	return scalar dev_meta = -2 * r(sum)
+			
+	return scalar converge_fails = `converge_fails'
 	
 	sort person item
 	drop _fillin temp_*
@@ -115,59 +137,45 @@ preserve
 	
 	local converge_fails = 0
 	
-	// --- Holdout validation ---.
-	
-	foreach n in newitems sameitems {
-		
-		`quietly' melogit y_`n' `varlist' || person:
-		//rmse, predict_opts(xb)
-		//return scalar rmse_full_`n' = r(rmse_full)
-		//return scalar rmse_fix_`n' = r(rmse_fix)
-		if (e(converged) == 0) local ++converge_fails
-		matrix B_`n' = r(table)
-		matrix E_`n' = e(b)
-		
-		// Return parameter estimates
-		local cols : colnames B_`n'
-		local cols `=subinstr("`cols'", "x", "beta", .)'
-		local cols `=subinstr("`cols'", "c.", "", .)'
-		local cols `=subinstr("`cols'", "beta2#beta3", "beta5", .)'
-		local cols `=subinstr("`cols'", "beta2#beta4", "beta6", .)'
-		local cols `=subinstr("`cols'", "_cons", "beta1", 1)'
-		local cols `=subinstr("`cols'", "_cons", "sigmasq", 1)'
-		forvalues j = 1/`=colsof(B_`n')' {
-			local cname = word("`cols'", `j')
-			return scalar `=`"`cname'"' + "_est_" + `"`n'"'' = el(B_`n',1,`j')
-			return scalar `=`"`cname'"' + "_se_" + `"`n'"'' = el(B_`n',2,`j')
-		}
-		
-		// Get deviance in validation and test data
-		local cols : colfullnames E_`n'
-		foreach m in validation test {
-			matrix E_`n'_`m' = E_`n'
-			matrix colnames E_`n'_`m' = `=subinstr("`cols'", "_`n'", "_`m'", .)'
-			`quietly' melogit y_`m' `varlist' || person:, asis from(E_`n'_`m') iterate(0)
-			return scalar dev_`m'_`n' = -2 * e(ll)
-		}
-		
-	}
-	
-	// --- Insample deviance (test data only) ---
-	
-	`quietly' melogit y_test `varlist' || person:
+	// Fit to training data
+	`quietly' melogit y_train `varlist' || person:
+	return scalar dev_train = -2 * e(ll)
 	if (e(converged) == 0) local ++converge_fails
-	return scalar dev_intest = -2 * e(ll)
+	matrix B = r(table)
+	matrix E = e(b)
 	
-	// --- CV methods (validation data only) ---
-	
-	`quietly' melogit y_validation `varlist' || person:
-	if (e(converged) == 0) local ++converge_fails
-	return scalar dev_invalidation = -2 * e(ll)
-
 	// Information criteria
 	`quietly' estat ic
 	return scalar aic = el(r(S), 1, 5)
 	return scalar bic = el(r(S), 1, 6)
+	
+	// Return parameter estimates
+	local cols : colnames B
+	local cols `=subinstr("`cols'", "x", "beta", .)'
+	local cols `=subinstr("`cols'", "c.", "", .)'
+	local cols `=subinstr("`cols'", "beta2#beta3", "beta5", .)'
+	local cols `=subinstr("`cols'", "beta2#beta4", "beta6", .)'
+	local cols `=subinstr("`cols'", "_cons", "beta1", 1)'
+	local cols `=subinstr("`cols'", "_cons", "sigmasq", 1)'
+	forvalues j = 1/`=colsof(B)' {
+		local cname = word("`cols'", `j')
+		return scalar `cname'_est = el(B,1,`j')
+		return scalar `cname'_se = el(B,2,`j')
+	}
+	
+	// Get HV deviance HV in validation and test data
+	local cols : colfullnames E
+	foreach m in newitems sameitems test {
+		matrix E_`m' = E
+		matrix colnames E_`m' = `=subinstr("`cols'", "_train", "_`m'", .)'
+		`quietly' melogit y_`m' `varlist' || person:, asis from(E_`m') iterate(0)
+		return scalar dev_`m' = -2 * e(ll)
+	}
+	
+	// Get insample deviance from test data
+	`quietly' melogit y_test `varlist' || person:
+	if (e(converged) == 0) local ++converge_fails
+	return scalar dev_intest = -2 * e(ll)
 
 	return scalar converge_fails = `converge_fails'
 	
@@ -193,88 +201,63 @@ preserve
 	local converge_fails = 0
 	`quietly' summarize item
 	local I = r(max)
-
-	// Set up meta-analysis dataset
-	sort person item
-	foreach n in newitems sameitems validation test {
-		`quietly' melogit y_`n' ibn.item, noconstant || person:
-		if (e(converged) == 0) local ++converge_fails
-		if ("`n'" == "validation") return scalar dev_rasch = -2*e(ll)
-		matrix A_`n' = r(table)
-		matrix B_`n' = A_`n'[1..2, 1..`I']'
-		svmat B_`n', names(col)
-		rename (b se) (b_`n' se_`n')
-	}
-	`quietly' drop if b_newitems == .
 	
-	// Holdout validation meta-regression
-	foreach n in newitems sameitems {
-		
-		`quietly' gsem (b_`n' <- c.se_`n'#c.M@1 `varlist'), variance(M@1)
-		matrix B_`n' =  r(table)
-		if (e(converged) == 0) local ++converge_fails
-		predict delta_hat_`n', eta conditional(fixedonly)
-		//rmse, predict_var(delta_hat_`n')
-		//return scalar rmse_full_`n' = r(rmse_full)
-		//return scalar rmse_fix_`n' = r(rmse_fix)
-		
-		// Return parameter estimates
-		local cols : colnames B_`n'
-		local cols `=regexr("`cols'", "c.se_(new|same)items#c.M", "drop")'
-		local cols `=subinstr("`cols'", "x", "beta", .)'
-		local cols `=subinstr("`cols'", "c.", "", .)'
-		local cols `=subinstr("`cols'", "beta2#beta3", "beta5", .)'
-		local cols `=subinstr("`cols'", "beta2#beta4", "beta6", .)'
-		local cols `=subinstr("`cols'", "_cons", "beta1", 1)'
-		local cols `=subinstr("`cols'", "_cons", "drop", 1)'
-		local cols `=subinstr("`cols'", "_cons", "tausq", 1)'
-		forvalues j = 1/`=colsof(B_`n')' {
-			local cname = word("`cols'", `j')
-			if ("`cname'" != "drop") {
-				return scalar `=`"`cname'"' + "_est_" + `"`n'"'' = el(B_`n',1,`j')
-				return scalar `=`"`cname'"' + "_se_" + `"`n'"'' = el(B_`n',2,`j')
-			}
-		}
-		
-		matrix E_`n' = e(b)
-		generate tausq_`n' = el(E_`n', 1, colsof(E_`n'))
-		foreach m in validation test {
-			generate ll_`m'_`n' = ///
-				log(normalden(b_`m', delta_hat_`n', sqrt(tausq_`n' + se_`m'^2)))
-			`quietly' summarize ll_`m'_`n'
-			return scalar dev_`m'_`n' = -2*r(sum)
-		}
-		
-	}
-
-	// --- In-sample meta-regression (test data only) ---
-
-	`quietly' gsem (b_test <- c.se_test#c.M@1 `varlist'), variance(M@1)
+	// Training data estimation
+	`quietly' gsem (b_train <- c.se_train#c.M@1 `varlist'), variance(M@1)
+	return scalar dev_train = -2 * e(ll)
+	matrix B =  r(table)
+	matrix E = e(b)
 	if (e(converged) == 0) local ++converge_fails
-	return scalar dev_intest = -2*e(ll)	
-	
-	// --- CV methods (validation data only) ---
-	
-	`quietly' gsem (b_validation <- c.se_validation#c.M@1 `varlist'), variance(M@1)
-	if (e(converged) == 0) local ++converge_fails
-	return scalar dev_invalidation = -2*e(ll)
+	predict delta_hat_training, eta conditional(fixedonly)
+	generate tausq = el(E, 1, colsof(E))
 	
 	// Information criteria
 	`quietly' estat ic
 	return scalar aic = el(r(S), 1, 5)
 	return scalar bic = el(r(S), 1, 6)
 	
+	// Return parameter estimates
+	local cols : colnames B
+	local cols `=regexr("`cols'", "c.se_train#c.M", "drop")'
+	local cols `=subinstr("`cols'", "x", "beta", .)'
+	local cols `=subinstr("`cols'", "c.", "", .)'
+	local cols `=subinstr("`cols'", "beta2#beta3", "beta5", .)'
+	local cols `=subinstr("`cols'", "beta2#beta4", "beta6", .)'
+	local cols `=subinstr("`cols'", "_cons", "beta1", 1)'
+	local cols `=subinstr("`cols'", "_cons", "drop", 1)'
+	local cols `=subinstr("`cols'", "_cons", "tausq", 1)'
+	forvalues j = 1/`=colsof(B)' {
+		local cname = word("`cols'", `j')
+		if ("`cname'" != "drop") {
+			return scalar `cname'_est = el(B, 1, `j')
+			return scalar `cname'_se = el(B, 2, `j')
+		}
+	}
+	
+	// Holdout validation meta-regression
+	foreach n in newitems sameitems test {
+		`quietly' generate ll_`n' = ///
+			log(normalden(b_`n', delta_hat, sqrt(tausq + se_`n'^2)))
+		`quietly' summarize ll_`n'
+		return scalar dev_`n' = -2*r(sum)
+	}
+
+	// In-sample meta-regression (test data only)
+	`quietly' gsem (b_test <- c.se_test#c.M@1 `varlist'), variance(M@1)
+	if (e(converged) == 0) local ++converge_fails
+	return scalar dev_intest = -2*e(ll)	
+	
 	// LOO CV meta-regression
 	quietly generate ll_loo = .
 	forvalues i = 1/`I' {
-		`quietly' gsem (b_validation <- c.se_validation#c.M@1 `varlist') ///
+		`quietly' gsem (b_train <- c.se_train#c.M@1 `varlist') ///
 			if item != `i', variance(M@1)
 		if (e(converged) == 0) local ++converge_fails
 		predict delta_hat_temp, eta conditional(fixedonly)
 		matrix E_loo = e(b)
 		local tau2 = el(E_loo, 1, colsof(E_loo))
-		`quietly' replace ll_loo = log(normalden(delta_hat_temp, b_validation, ///
-			sqrt(`tau2' + se_validation^2))) if item == `i'
+		`quietly' replace ll_loo = log(normalden(delta_hat_temp, b_train, ///
+			sqrt(`tau2' + se_train^2))) if item == `i'
 		drop delta_hat_temp
 	}
 	`quietly' summarize ll_loo
@@ -300,7 +283,7 @@ end
 import delimited "random.txt", delimiter(tab) varnames(nonames) clear
 rename v`s' seed
 drop v*
-keep in 1/500
+keep in 1/510
 
 // Set up simulation conditions, store in a matrix
 egen condition = seq(), from(1) to(5)
@@ -327,42 +310,27 @@ postfile memhold_lltm double(    ///
 		nitems                   ///
 		npersons                 ///
 		model                    ///
-		dev_invalidation         ///
-		aic                      ///
-		bic                      ///
-		dev_intest               ///
-		dev_test_newitems        ///
-		dev_validation_newitems  ///
-		dev_test_sameitems       ///
-		dev_validation_sameitems ///
-		beta1_est_newitems       ///
-		beta2_est_newitems       ///
-		beta3_est_newitems       ///
-		beta4_est_newitems       ///
-		beta5_est_newitems       ///
-		beta6_est_newitems       ///
-		sigmasq_est_newitems       ///
-		beta1_est_sameitems      ///
-		beta2_est_sameitems      ///
-		beta3_est_sameitems      ///
-		beta4_est_sameitems      ///
-		beta5_est_sameitems      ///
-		beta6_est_sameitems      ///
-		sigmasq_est_sameitems      ///
-		beta1_se_newitems        ///
-		beta2_se_newitems        ///
-		beta3_se_newitems        ///
-		beta4_se_newitems        ///
-		beta5_se_newitems        ///
-		beta6_se_newitems        ///
-		sigmasq_se_newitems        ///
-		beta1_se_sameitems       ///
-		beta2_se_sameitems       ///
-		beta3_se_sameitems       ///
-		beta4_se_sameitems       ///
-		beta5_se_sameitems       ///
-		beta6_se_sameitems       ///
-		sigmasq_se_sameitems       ///
+		dev_intest     ///
+		dev_test       ///
+		dev_sameitems  ///
+		dev_newitems   ///
+		sigmasq_se     ///
+		sigmasq_est    ///
+		beta1_se       ///
+		beta1_est      ///
+		beta6_se       ///
+		beta6_est      ///
+		beta5_se       ///
+		beta5_est      ///
+		beta4_se       ///
+		beta4_est      ///
+		beta3_se       ///
+		beta3_est      ///
+		beta2_se       ///
+		beta2_est      ///
+		bic            ///
+		aic            ///
+		dev_train      ///
 	) using results_lltm_`s', replace
 postfile memhold_twostage double(    ///
 		seed                     ///
@@ -371,51 +339,37 @@ postfile memhold_twostage double(    ///
 		nitems                   ///
 		npersons                 ///
 		model                    ///
-		dev_invalidation         ///
-		aic                      ///
-		bic                      ///
-		dev_intest               ///
-		dev_test_newitems        ///
-		dev_validation_newitems  ///
-		dev_test_sameitems       ///
-		dev_validation_sameitems ///
-		beta1_est_newitems       ///
-		beta2_est_newitems       ///
-		beta3_est_newitems       ///
-		beta4_est_newitems       ///
-		beta5_est_newitems       ///
-		beta6_est_newitems       ///
-		tausq_est_newitems       ///
-		beta1_est_sameitems      ///
-		beta2_est_sameitems      ///
-		beta3_est_sameitems      ///
-		beta4_est_sameitems      ///
-		beta5_est_sameitems      ///
-		beta6_est_sameitems      ///
-		tausq_est_sameitems      ///
-		beta1_se_newitems        ///
-		beta2_se_newitems        ///
-		beta3_se_newitems        ///
-		beta4_se_newitems        ///
-		beta5_se_newitems        ///
-		beta6_se_newitems        ///
-		tausq_se_newitems        ///
-		beta1_se_sameitems       ///
-		beta2_se_sameitems       ///
-		beta3_se_sameitems       ///
-		beta4_se_sameitems       ///
-		beta5_se_sameitems       ///
-		beta6_se_sameitems       ///
-		tausq_se_sameitems       ///
-		dev_loo                  ///
-		dev_rasch                ///
+		dev_loo       ///
+		dev_intest    ///
+		dev_test      ///
+		dev_sameitems ///
+		dev_newitems  ///
+		tausq_se      ///
+		tausq_est     ///
+		beta1_se      ///
+		beta1_est     ///
+		beta6_se      ///
+		beta6_est     ///
+		beta5_se      ///
+		beta5_est     ///
+		beta4_se      ///
+		beta4_est     ///
+		beta3_se      ///
+		beta3_est     ///
+		beta2_se      ///
+		beta2_est     ///
+		bic           ///
+		aic           ///
+		dev_train     ///
 	) using results_twostage_`s', replace
 postfile memhold_errors double(seed) condition double(tau) nitems npersons ///
 	model str12(function) using results_errors_`s', replace
 
 timer clear
 timer on 1
-forvalues i = 1/`=rowsof(SIM)' {
+//forvalues i = 1/`=rowsof(SIM)' {
+
+forvalues i = 1/2 {
 
 	display "$S_TIME: Starting `i' of `=rowsof(SIM)'"
 
@@ -448,42 +402,27 @@ forvalues i = 1/`=rowsof(SIM)' {
 				(`=el(SIM, `i', colnumb(SIM, "nitems"))') ///
 				(`=el(SIM, `i', colnumb(SIM, "npersons"))') ///
 				(`m') ///
-				(r(dev_invalidation         )) ///
-				(r(aic                      )) ///
-				(r(bic                      )) ///
-				(r(dev_intest               )) ///
-				(r(dev_test_newitems        )) ///
-				(r(dev_validation_newitems  )) ///
-				(r(dev_test_sameitems       )) ///
-				(r(dev_validation_sameitems )) ///
-				(r(beta1_est_newitems           )) ///
-				(r(beta2_est_newitems           )) ///
-				(r(beta3_est_newitems           )) ///
-				(r(beta4_est_newitems           )) ///
-				(r(beta5_est_newitems           )) ///
-				(r(beta6_est_newitems           )) ///
-				(r(sigmasq_est_newitems         )) ///
-				(r(beta1_est_sameitems          )) ///
-				(r(beta2_est_sameitems          )) ///
-				(r(beta3_est_sameitems          )) ///
-				(r(beta4_est_sameitems          )) ///
-				(r(beta5_est_sameitems          )) ///
-				(r(beta6_est_sameitems          )) ///
-				(r(sigmasq_est_sameitems        )) ///
-				(r(beta1_se_newitems           )) ///
-				(r(beta2_se_newitems           )) ///
-				(r(beta3_se_newitems           )) ///
-				(r(beta4_se_newitems           )) ///
-				(r(beta5_se_newitems           )) ///
-				(r(beta6_se_newitems           )) ///
-				(r(sigmasq_se_newitems         )) ///
-				(r(beta1_se_sameitems          )) ///
-				(r(beta2_se_sameitems          )) ///
-				(r(beta3_se_sameitems          )) ///
-				(r(beta4_se_sameitems          )) ///
-				(r(beta5_se_sameitems          )) ///
-				(r(beta6_se_sameitems          )) ///
-				(r(sigmasq_se_sameitems        ))
+				(r(dev_intest   ))  ///
+				(r(dev_test     ))  ///
+				(r(dev_sameitems))  ///
+				(r(dev_newitems ))  ///
+				(r(sigmasq_se   ))  ///
+				(r(sigmasq_est  ))  ///
+				(r(beta1_se     ))  ///
+				(r(beta1_est    ))  ///
+				(r(beta6_se     ))  ///
+				(r(beta6_est    ))  ///
+				(r(beta5_se     ))  ///
+				(r(beta5_est    ))  ///
+				(r(beta4_se     ))  ///
+				(r(beta4_est    ))  ///
+				(r(beta3_se     ))  ///
+				(r(beta3_est    ))  ///
+				(r(beta2_se     ))  ///
+				(r(beta2_est    ))  ///
+				(r(bic          ))  ///
+				(r(aic          ))  ///
+				(r(dev_train    ))
 		}
 
 		capture noisily twostage_cv `m`m''
@@ -509,44 +448,28 @@ forvalues i = 1/`=rowsof(SIM)' {
 				(`=el(SIM, `i', colnumb(SIM, "nitems"))') ///
 				(`=el(SIM, `i', colnumb(SIM, "npersons"))') ///
 				(`m') ///
-				(r(dev_invalidation         )) ///
-				(r(aic                      )) ///
-				(r(bic                      )) ///
-				(r(dev_intest               )) ///
-				(r(dev_test_newitems        )) ///
-				(r(dev_validation_newitems  )) ///
-				(r(dev_test_sameitems       )) ///
-				(r(dev_validation_sameitems )) ///
-				(r(beta1_est_newitems           )) ///
-				(r(beta2_est_newitems           )) ///
-				(r(beta3_est_newitems           )) ///
-				(r(beta4_est_newitems           )) ///
-				(r(beta5_est_newitems           )) ///
-				(r(beta6_est_newitems           )) ///
-				(r(tausq_est_newitems           )) ///
-				(r(beta1_est_sameitems          )) ///
-				(r(beta2_est_sameitems          )) ///
-				(r(beta3_est_sameitems          )) ///
-				(r(beta4_est_sameitems          )) ///
-				(r(beta5_est_sameitems          )) ///
-				(r(beta6_est_sameitems          )) ///
-				(r(tausq_est_sameitems          )) ///
-				(r(beta1_se_newitems           )) ///
-				(r(beta2_se_newitems           )) ///
-				(r(beta3_se_newitems           )) ///
-				(r(beta4_se_newitems           )) ///
-				(r(beta5_se_newitems           )) ///
-				(r(beta6_se_newitems           )) ///
-				(r(tausq_se_newitems           )) ///
-				(r(beta1_se_sameitems          )) ///
-				(r(beta2_se_sameitems          )) ///
-				(r(beta3_se_sameitems          )) ///
-				(r(beta4_se_sameitems          )) ///
-				(r(beta5_se_sameitems          )) ///
-				(r(beta6_se_sameitems          )) ///
-				(r(tausq_se_sameitems          )) ///
-				(r(dev_loo))                   ///
-				(r(dev_rasch))
+				(r(dev_loo      ))  ///
+				(r(dev_intest   ))  ///
+				(r(dev_test     ))  ///
+				(r(dev_sameitems))  ///
+				(r(dev_newitems ))  ///
+				(r(tausq_se     ))  ///
+				(r(tausq_est    ))  ///
+				(r(beta1_se     ))  ///
+				(r(beta1_est    ))  ///
+				(r(beta6_se     ))  ///
+				(r(beta6_est    ))  ///
+				(r(beta5_se     ))  ///
+				(r(beta5_est    ))  ///
+				(r(beta4_se     ))  ///
+				(r(beta4_est    ))  ///
+				(r(beta3_se     ))  ///
+				(r(beta3_est    ))  ///
+				(r(beta2_se     ))  ///
+				(r(beta2_est    ))  ///
+				(r(bic          ))  ///
+				(r(aic          ))  ///
+				(r(dev_train    )) 
 		}
 	}
 

@@ -4,6 +4,7 @@
 *.log
 chapter_2/figs/*
 chapter_2/archive/*
-
+chapter_3/*
+figs/*
 *.log
 *.aux
