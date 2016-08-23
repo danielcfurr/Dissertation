@@ -70,6 +70,7 @@ program define sim_dataset, rclass
 	foreach n in train newitems sameitems test {
 		quietly melogit y_`n' ibn.item, noconstant || person:
 		if (e(converged) == 0) local ++converge_fails
+		// Return training sample Rasch deviance
 		if ("`n'" == "train") return scalar dev_rasch = -2*e(ll)
 		matrix A_`n' = r(table)
 		matrix B_`n' = A_`n'[1..2, 1..`I']'
@@ -77,10 +78,15 @@ program define sim_dataset, rclass
 		rename (b se) (b_`n' se_`n')
 	}
 	
-	// Get "rasch" deviance from metaanalysis
+	// Return training sample "Rasch" meta-regression deviance
 	quietly generate ll_train = log(normalden(0, 0, se_train))
 	quietly summarize ll_train
 	return scalar dev_meta = -2 * r(sum)
+	
+	// Report rmse for Rasch in test data
+	rmse, predict_var(b_test)
+	return scalar rmse_full = r(rmse_full)
+	return scalar rmse_fix = r(rmse_fix)
 			
 	return scalar converge_fails = `converge_fails'
 	
@@ -144,6 +150,11 @@ preserve
 	matrix B = r(table)
 	matrix E = e(b)
 	
+	// Get RMSE for HV
+	rmse, predict_opts(xb)
+	return scalar rmse_full = r(rmse_full)
+	return scalar rmse_fix = r(rmse_fix)
+	
 	// Information criteria
 	`quietly' estat ic
 	return scalar aic = el(r(S), 1, 5)
@@ -176,7 +187,7 @@ preserve
 	`quietly' melogit y_test `varlist' || person:
 	if (e(converged) == 0) local ++converge_fails
 	return scalar dev_intest = -2 * e(ll)
-
+	
 	return scalar converge_fails = `converge_fails'
 	
 restore
@@ -210,6 +221,11 @@ preserve
 	if (e(converged) == 0) local ++converge_fails
 	predict delta_hat_training, eta conditional(fixedonly)
 	generate tausq = el(E, 1, colsof(E))
+	
+	// Get RMSE for HV
+	rmse, predict_var(delta_hat_training)
+	return scalar rmse_full = r(rmse_full)
+	return scalar rmse_fix = r(rmse_fix)
 	
 	// Information criteria
 	`quietly' estat ic
@@ -303,6 +319,18 @@ local m2 "x2-x4 c.x2#c.x3"
 local m3 "x2-x4 c.x2#c.x3 c.x2#c.x4"
 
 // Prepare to store results
+postfile memhold_rasch double(   ///
+		seed                     ///
+		condition                ///
+		tau                      ///
+		nitems                   ///
+		npersons                 ///
+		converge_fails           ///
+		dev_meta                 ///
+		dev_rasch                ///
+		rmse_full                ///
+		rmse_fix                 ///
+	) using results_rasch_`s', replace
 postfile memhold_lltm double(    ///
 		seed                     ///
 		condition                ///
@@ -310,6 +338,7 @@ postfile memhold_lltm double(    ///
 		nitems                   ///
 		npersons                 ///
 		model                    ///
+		converge_fails           ///
 		dev_intest     ///
 		dev_test       ///
 		dev_sameitems  ///
@@ -331,6 +360,8 @@ postfile memhold_lltm double(    ///
 		bic            ///
 		aic            ///
 		dev_train      ///
+		rmse_full      ///
+		rmse_fix       ///
 	) using results_lltm_`s', replace
 postfile memhold_twostage double(    ///
 		seed                     ///
@@ -339,6 +370,7 @@ postfile memhold_twostage double(    ///
 		nitems                   ///
 		npersons                 ///
 		model                    ///
+		converge_fails           ///
 		dev_loo       ///
 		dev_intest    ///
 		dev_test      ///
@@ -361,126 +393,117 @@ postfile memhold_twostage double(    ///
 		bic           ///
 		aic           ///
 		dev_train     ///
+		rmse_full     ///
+		rmse_fix      ///
 	) using results_twostage_`s', replace
-postfile memhold_errors double(seed) condition double(tau) nitems npersons ///
-	model str12(function) using results_errors_`s', replace
 
 timer clear
-timer on 1
-//forvalues i = 1/`=rowsof(SIM)' {
-
-forvalues i = 1/2 {
+timer on 4
+forvalues i = 1/`=rowsof(SIM)' {
 
 	display "$S_TIME: Starting `i' of `=rowsof(SIM)'"
 
+	timer on 1
 	sim_dataset, npersons(500) sigma(1) ///
 		seed(`=el(SIM, `i', colnumb(SIM, "seed"))') ///
 		nitems(`=el(SIM, `i', colnumb(SIM, "nitems"))') /// 
 		tau(`=el(SIM, `i', colnumb(SIM, "tau"))')
-		
+	post memhold_rasch ///
+		(`=el(SIM, `i', colnumb(SIM, "seed"))') ///
+		(`=el(SIM, `i', colnumb(SIM, "condition"))') ///
+		(`=el(SIM, `i', colnumb(SIM, "tau"))') ///
+		(`=el(SIM, `i', colnumb(SIM, "nitems"))') ///
+		(`=el(SIM, `i', colnumb(SIM, "npersons"))') ///
+		(r(converge_fails))  ///
+		(r(dev_meta)      )  ///
+		(r(dev_rasch)     )  ///
+		(r(rmse_full)     )  ///
+		(r(rmse_fix)      )
+	timer off 1
+	
 	forvalues m = 1/3 {
 	
+		timer on 2
 		capture noisily lltm_cv `m`m''
-		// If the function fails, either a positive number or nothing will be
-		// posted to r(converge_fails). If so, post conditions to 
-		// memhold_errors. Otherwise, post simulation results to memhold_lltm.
-		if r(converge_fails) != 0 {
-			post memhold_errors ///
-				(`=el(SIM, `i', colnumb(SIM, "seed"))') ///
-				(`=el(SIM, `i', colnumb(SIM, "condition"))') ///
-				(`=el(SIM, `i', colnumb(SIM, "tau"))') ///
-				(`=el(SIM, `i', colnumb(SIM, "nitems"))') ///
-				(`=el(SIM, `i', colnumb(SIM, "npersons"))') ///
-				(`m') ///
-				("lltm_cv")
-		} 
-		else {
-			post memhold_lltm ///
-				(`=el(SIM, `i', colnumb(SIM, "seed"))') ///
-				(`=el(SIM, `i', colnumb(SIM, "condition"))') ///
-				(`=el(SIM, `i', colnumb(SIM, "tau"))') ///
-				(`=el(SIM, `i', colnumb(SIM, "nitems"))') ///
-				(`=el(SIM, `i', colnumb(SIM, "npersons"))') ///
-				(`m') ///
-				(r(dev_intest   ))  ///
-				(r(dev_test     ))  ///
-				(r(dev_sameitems))  ///
-				(r(dev_newitems ))  ///
-				(r(sigmasq_se   ))  ///
-				(r(sigmasq_est  ))  ///
-				(r(beta1_se     ))  ///
-				(r(beta1_est    ))  ///
-				(r(beta6_se     ))  ///
-				(r(beta6_est    ))  ///
-				(r(beta5_se     ))  ///
-				(r(beta5_est    ))  ///
-				(r(beta4_se     ))  ///
-				(r(beta4_est    ))  ///
-				(r(beta3_se     ))  ///
-				(r(beta3_est    ))  ///
-				(r(beta2_se     ))  ///
-				(r(beta2_est    ))  ///
-				(r(bic          ))  ///
-				(r(aic          ))  ///
-				(r(dev_train    ))
-		}
+		post memhold_lltm ///
+			(`=el(SIM, `i', colnumb(SIM, "seed"))') ///
+			(`=el(SIM, `i', colnumb(SIM, "condition"))') ///
+			(`=el(SIM, `i', colnumb(SIM, "tau"))') ///
+			(`=el(SIM, `i', colnumb(SIM, "nitems"))') ///
+			(`=el(SIM, `i', colnumb(SIM, "npersons"))') ///
+			(`m') ///
+			(r(converge_fails)) ///
+			(r(dev_intest   ))  ///
+			(r(dev_test     ))  ///
+			(r(dev_sameitems))  ///
+			(r(dev_newitems ))  ///
+			(r(sigmasq_se   ))  ///
+			(r(sigmasq_est  ))  ///
+			(r(beta1_se     ))  ///
+			(r(beta1_est    ))  ///
+			(r(beta6_se     ))  ///
+			(r(beta6_est    ))  ///
+			(r(beta5_se     ))  ///
+			(r(beta5_est    ))  ///
+			(r(beta4_se     ))  ///
+			(r(beta4_est    ))  ///
+			(r(beta3_se     ))  ///
+			(r(beta3_est    ))  ///
+			(r(beta2_se     ))  ///
+			(r(beta2_est    ))  ///
+			(r(bic          ))  ///
+			(r(aic          ))  ///
+			(r(dev_train    ))  ///
+			(r(rmse_full)    )  ///
+			(r(rmse_fix)     )
+		timer off 2
 
+		timer on 3
 		capture noisily twostage_cv `m`m''
-		// If the function fails, either a positive number or nothing will be
-		// posted to r(converge_fails). If so, post conditions to 
-		// memhold_errors. Otherwise, post simulation results to 
-		// memhold_twostage.
-		if r(converge_fails) != 0 {
-			post memhold_errors ///
-				(`=el(SIM, `i', colnumb(SIM, "seed"))') ///
-				(`=el(SIM, `i', colnumb(SIM, "condition"))') ///
-				(`=el(SIM, `i', colnumb(SIM, "tau"))') ///
-				(`=el(SIM, `i', colnumb(SIM, "nitems"))') ///
-				(`=el(SIM, `i', colnumb(SIM, "npersons"))') ///
-				(`m') ///
-				("twostage_cv")
-		} 
-		else {
-			post memhold_twostage ///
-				(`=el(SIM, `i', colnumb(SIM, "seed"))') ///
-				(`=el(SIM, `i', colnumb(SIM, "condition"))') ///
-				(`=el(SIM, `i', colnumb(SIM, "tau"))') ///
-				(`=el(SIM, `i', colnumb(SIM, "nitems"))') ///
-				(`=el(SIM, `i', colnumb(SIM, "npersons"))') ///
-				(`m') ///
-				(r(dev_loo      ))  ///
-				(r(dev_intest   ))  ///
-				(r(dev_test     ))  ///
-				(r(dev_sameitems))  ///
-				(r(dev_newitems ))  ///
-				(r(tausq_se     ))  ///
-				(r(tausq_est    ))  ///
-				(r(beta1_se     ))  ///
-				(r(beta1_est    ))  ///
-				(r(beta6_se     ))  ///
-				(r(beta6_est    ))  ///
-				(r(beta5_se     ))  ///
-				(r(beta5_est    ))  ///
-				(r(beta4_se     ))  ///
-				(r(beta4_est    ))  ///
-				(r(beta3_se     ))  ///
-				(r(beta3_est    ))  ///
-				(r(beta2_se     ))  ///
-				(r(beta2_est    ))  ///
-				(r(bic          ))  ///
-				(r(aic          ))  ///
-				(r(dev_train    )) 
-		}
+		post memhold_twostage ///
+			(`=el(SIM, `i', colnumb(SIM, "seed"))') ///
+			(`=el(SIM, `i', colnumb(SIM, "condition"))') ///
+			(`=el(SIM, `i', colnumb(SIM, "tau"))') ///
+			(`=el(SIM, `i', colnumb(SIM, "nitems"))') ///
+			(`=el(SIM, `i', colnumb(SIM, "npersons"))') ///
+			(`m') ///
+			(r(converge_fails)) ///
+			(r(dev_loo      ))  ///
+			(r(dev_intest   ))  ///
+			(r(dev_test     ))  ///
+			(r(dev_sameitems))  ///
+			(r(dev_newitems ))  ///
+			(r(tausq_se     ))  ///
+			(r(tausq_est    ))  ///
+			(r(beta1_se     ))  ///
+			(r(beta1_est    ))  ///
+			(r(beta6_se     ))  ///
+			(r(beta6_est    ))  ///
+			(r(beta5_se     ))  ///
+			(r(beta5_est    ))  ///
+			(r(beta4_se     ))  ///
+			(r(beta4_est    ))  ///
+			(r(beta3_se     ))  ///
+			(r(beta3_est    ))  ///
+			(r(beta2_se     ))  ///
+			(r(beta2_est    ))  ///
+			(r(bic          ))  ///
+			(r(aic          ))  ///
+			(r(dev_train    ))  ///
+			(r(rmse_full)    )  ///
+			(r(rmse_fix)     )
+		timer off 3
+		
 	}
 
 }
-timer off 1
+
+timer off 4
 timer list
 
+postclose memhold_rasch
 postclose memhold_twostage
 postclose memhold_lltm
-postclose memhold_errors
-
 
 // Save an example dataset
 clear
