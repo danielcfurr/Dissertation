@@ -129,7 +129,7 @@ kept_seeds <- tapply(seeds_df$seed,
                      function(x) x[1:500])
 kept_seeds <- unlist(kept_seeds)
 rasch_df <- subset(rasch_df, seed %in% kept_seeds)
-rasch_df <- subset(rasch_df, seed %in% kept_seeds)
+df <- subset(df, seed %in% kept_seeds)
 
 
 # LR tests: descriptive vs explanatory models ----------------------------------
@@ -217,7 +217,7 @@ bias1 <- ggplot(subset(df_bias, nitems == 32 & model == 2)) +
   aes(x = as.factor(tau), y = mean, ymin = lower, ymax = upper,
       color = factor(par)) +
   geom_linerange(position = position_dodge(width = 0.5)) +
-  geom_point(size = 1, position = position_dodge(width = 0.5)) +
+  geom_point(size = 2, position = position_dodge(width = 0.5)) +
   facet_grid(. ~ Method) +
   labs(list(x = expression(paste("Residual item SD (", tau, ")")),
             y = "Bias", color = NULL)) +
@@ -228,7 +228,7 @@ bias2 <- ggplot(subset(df_bias, tau == .5 & model == 2)) +
   aes(x = as.factor(nitems), y = mean, ymin = lower, ymax = upper,
       color = factor(par)) +
   geom_linerange(position = position_dodge(width = 0.5)) +
-  geom_point(size = 1, position = position_dodge(width = 0.5)) +
+  geom_point(size = 2, position = position_dodge(width = 0.5)) +
   facet_grid(. ~ Method) +
   labs(list(x = expression(paste("Number of items (", italic(I), ")")),
             y = "Bias", color = NULL)) +
@@ -303,12 +303,12 @@ percents_df <- aggregate(selected ~ method + selector + model + tau + nitems,
                          df_sel, function(x) mean(x)*100)
 
 # Format data frame for plotting
-selector_labels <- c("chi2" = "LR test",
-                     "aic" = "AIC",
-                     "bic" = "BIC",
-                     "dev_sameitems" = "HV same items",
+selector_labels <- c("dev_sameitems" = "HV same items",
                      "dev_newitems" = "HV new items",
-                     "dev_loo" = "LOCO-CV")
+                     "aic" = "AIC",
+                     "dev_loo" = "LOCO-CV",
+                     "chi2" = "LR test",
+                     "bic" = "BIC")
 percents_df$Selector <- refactor(percents_df$selector, selector_labels)
 percents_df$Method <- refactor(percents_df$method, method_labels)
 
@@ -364,11 +364,13 @@ df_pen <- cbind(df_pen[, -ncol(df_pen)], df_pen[, ncol(df_pen)])
 
 # Assemble data frame for plotting. Top is means without SD, bottom is means
 # and SD for only Model 2.
+side_labels <- c("Est" = "Estimated penalties",
+                "SD" = "\u00B1 1 SD for Model 2 penalty")
 df_pen1 <- df_pen
 df_pen1$lower <- df_pen1$upper <- NA
-df_pen1$side <- "Estimated penalties"
+df_pen1$side <- "Est"
 df_pen2 <- subset(df_pen, model == 2)
-df_pen2$side <- "SD for Model 2 penalty"
+df_pen2$side <- "SD"
 df_penstack <- rbind(df_pen1, df_pen2)
 
 # Add labels to data frame to plot
@@ -381,6 +383,7 @@ df_penstack$Type <- refactor(paste(df_penstack$method, df_penstack$type),
                              df_penstack_labels)
 df_penstack$text <- ifelse(df_penstack$nitems == 64 | df_penstack$tau == 1,
                            paste0("M", df_penstack$model), "")
+df_penstack$side <- refactor(df_penstack$side, side_labels)
 
 # Add AIC penalty to data frame to plot
 aic_penalty <- 2*(5:7)
@@ -398,7 +401,7 @@ pen1 <- ggplot(subset(df_penstack, nitems == 32)) +
   aes(x = tau, y = mean, ymin = lower, ymax = upper, shape = as.factor(model),
       color = as.factor(model), fill = as.factor(model), label = text) +
   geom_ribbon(alpha = .25, show.legend = FALSE) +
-  geom_point(show.legend = FALSE) +
+  geom_point(size=2, show.legend = FALSE) +
   geom_line(show.legend = FALSE) +
   geom_line(aes(y = aic_penalty), size = .5, linetype = 2, show.legend = FALSE) +
   geom_text(hjust = "left", nudge_x = (1-.2)*.015, show.legend = FALSE) +
@@ -415,7 +418,7 @@ pen2 <- ggplot(subset(df_penstack, tau == .5)) +
   aes(x = nitems, y = mean, ymin = lower, ymax = upper, shape = as.factor(model),
       color = as.factor(model), fill = as.factor(model), label = text) +
   geom_ribbon(alpha = .25, show.legend = FALSE) +
-  geom_point(show.legend = FALSE) +
+  geom_point(size=2, show.legend = FALSE) +
   geom_line(show.legend = FALSE) +
   geom_line(aes(y = aic_penalty), size = .5, linetype = 2, show.legend = FALSE) +
   geom_text(hjust = "left", nudge_x = (64-16)*.015, show.legend = FALSE) +
@@ -449,19 +452,19 @@ df_predmean <- aggregate(relative ~ selector + tau + nitems + method,
 df_predmean$Selector <- refactor(df_predmean$selector, selector_labels)
 df_predmean$Method <- refactor(df_predmean$method, method_labels)
 
-
+# Plot prediction means for best models
 pred1 <- ggplot(subset(df_predmean, nitems == 32)) +
   aes(x = tau, y = relative, color = Selector, shape = Selector) +
-  geom_point() + geom_line() +
+  geom_point(size=2) + geom_line() +
   scale_x_continuous(breaks = unique(df_predmean$tau)) +
   xlab(expression(paste("Residual item SD (", tau, ")"))) +
-  ylab("Mean relative deviance") +
+  ylab("Mean relative holdout deviance") +
   labs(color = NULL, shape = NULL) +
   facet_wrap(~Method, ncol = 1, scales = "free_y") +
   theme(panel.grid.minor = element_blank())
 pred2 <- ggplot(subset(df_predmean, tau == .5)) +
   aes(x = nitems, y = relative, color = Selector, shape = Selector) +
-  geom_point() + geom_line() +
+  geom_point(size=2) + geom_line() +
   scale_x_continuous(breaks = unique(df_predmean$nitems)) +
   xlab(expression(paste("Number of items (", italic(I), ")"))) +
   ylab("") +
@@ -515,4 +518,16 @@ print(xtab, file = "../figs/2-table-X.tex", floating = FALSE,
       sanitize.colnames.function = function(x) x)
 
 var(ex$xB) # upsilon^2
+
+
+#  ------
+
+# LR test "penalty"
+x <- seq(from = 2, to = 4, by = .05)
+plot(x, pchisq(x, 1, lower.tail = FALSE))
+abline(h = .05)
+
+# BIC penalties
+log(500*32)
+log(32)
 
