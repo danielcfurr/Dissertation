@@ -1,0 +1,150 @@
+---
+title: "Marginal likelihood with large cluster sizes"
+author: "Daniel C. Furr"
+date: "April 1, 2016"
+output:
+  pdf_document:
+    toc: true
+    number_sections: true
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(tidy = TRUE, 
+                      dev = "png", dpi = 200,
+                      fig.height = 3.5, fig.width = 6)
+```
+
+# Purpose
+
+Previously I found that the adaptive quadrature used by the `integrate()` function in **R** functions quickly and accurately in calculating marginal likelihoods in a random intercept model with small clusters ($I = 10$ or $20$). However, in the context of the LLTM-E, finding the marginal likelihood with respect to items will involve much larger clusters. Specifically, the cluster size would be equal to the number of persons. For this reason, this report considers the accurary of `integrate()` versus adaptive quadrature with larger numbers of nodes for larger cluster sizes.
+
+
+# Simulation
+
+```{r}
+# Load libraries and simulation results
+library(ggplot2)
+load("sim_data.Rdata")
+lvls <- as.character(unique(df$method))
+lvls <- c(lvls[-1:-2], lvls[1:2])
+df$method <- factor(df$method, levels = lvls)
+```
+
+Data are generated in accordance with a RIM:
+$$ y_{ij} = \zeta_j + \epsilon_{ij} $$
+$$ \zeta_j \sim \mathrm{N}(x_j'\beta, \psi^2) $$
+$$ \epsilon_{ij} \sim \mathrm{N}(0, \sigma^2) $$
+where $i = 1 \ldots I$ indexes observations within cluster $j$, $j = 1 \ldots J$. Further, the "fixed" part of the model is:
+$$ x_j'\beta = \beta_0 + \beta_1 x_{1j} + \beta_2 x_{2j} + \beta_3 x_{3j} +
+  \beta_4 x_{1j} x_{2j} + \beta_5 x_{2j} x_{3j} $$
+
+The generating parameters are:
+
+* $I \in \{`r paste(sim_I, collapse = ", ")`\}$
+* $J = `r sim_J`$
+* $\sigma = `r sim_sigma`$
+* $\psi = `r sim_psi`$
+* $\beta = \{`r paste(sim_beta, collapse = ", ")`\}$
+
+One dataset is simulated per cluster size $I$.
+
+
+# Results
+
+## Per iteration accuracy
+
+Quadrature of various types is used to evaluate the marginal likelihood for each cluster for each posterior draw. For each dataset, this amounts to 
+$J \times \mathrm{draws} = `r sim_J` \times `r max(df$iter)`$
+evaluations. Each of these may be compared against the marginal likelihood calculated by the **Stan** program using the multivariate normal density, which is found to be accurate. Results from `integrate()` are abbreviated as "QPK/AQ".
+
+The graph below shows the number of times that the absolute difference between the quadrature approach and the **Stan** multivariate normal density function exceeed .001.
+
+```{r}
+# Plot per iteration difference for each cluster
+df_compare_left <- subset(df, method != "MVN")
+df_compare_right <- subset(df, method == "MVN")
+names(df_compare_right)[names(df_compare_right) == "mll"] <- "MVN"
+df_compare_right$method <- df_compare_right$secs <- NULL
+df_compare <- merge(df_compare_left, df_compare_right)
+df_compare$Difference <- df_compare$MVN - df_compare$mll
+lvls_I <- paste("I =", sort(unique(df_compare$I)))
+df_compare$I <- factor(paste("I =", df_compare$I), levels = lvls_I)
+df_compare$threshold <- abs(df_compare$Difference) > .001
+ggplot(subset(df_compare, threshold)) +
+  aes(method, fill = method) +
+  facet_wrap(~I) +
+  geom_bar()
+```
+
+
+## Aggregate accuracy
+
+Really I am interested in the posterior distribution for the marginal log-likelihood, so next I consider the mean and variance of the posterior for the marginal log-likelihood as calculated using the different methods. This differs from the previous section in terms of the unit of analysis. Previously, the unit of analysis was cluster by posterior draw, whereas here the unit of analysis is simply the cluster. 
+
+The plot below shows the number of times the absolute difference between cluster mean log-likelihood calculated with (adaptive) quadrature and those from the **Stan** program exceeded .001.
+
+```{r}
+# Plot overall difference for each cluster mean
+mean_var <- function(x) c(mean = mean(x), var = var(x))
+df_mean_left <- aggregate(mll ~ method + I + secs + j, 
+                          data = df_compare_left,
+                          FUN = mean_var)
+df_mean_right <- aggregate(MVN ~ I + j, 
+                           data = df_compare_right,
+                           FUN = mean_var)
+df_mean <- merge(df_mean_left, df_mean_right)
+df_mean$dif.mean <- df_mean$mll[,"mean"] - df_mean$MVN[,"mean"]
+df_mean$dif.var <- df_mean$mll[,"var"] - df_mean$MVN[,"var"]
+df_mean$I <- factor(paste("I =", df_mean$I), levels = lvls_I)
+df_mean$threshold_mean <- abs(df_mean$dif.mean) > .001
+df_mean$threshold_var <- abs(df_mean$dif.var) > .001
+ggplot(subset(df_mean, threshold_mean)) +
+  aes(method, fill = method) +
+  facet_wrap(~I) +
+  geom_bar()
+```
+
+And now I compare the variances.
+
+```{r}
+# Show results for variance
+ggplot(subset(df_mean, threshold_var)) +
+  aes(method, fill = method) +
+  facet_wrap(~I) +
+  geom_bar()
+```
+
+
+## Run time
+
+The plot below shows the time required for each method for one dataset.
+
+```{r}
+# Plot calculation time for each method
+df_time <- subset(df, method != "MVN", select = c("method", "I", "secs"))
+df_time <- unique(df_time)
+ggplot(df_time) +
+  aes(x = I, y = secs, group = method, color = method) +
+  geom_line() + geom_point(size = 2)
+```
+
+
+# Appendix
+
+## **Stan** program
+
+```{r, comment = ""}
+cat(readLines("rim_mvn.stan"), sep = "\n")
+```
+
+## Code producing the simulation results
+
+```{r, comment = ""}
+cat(readLines("run_simulation.R"), sep = "\n")
+```
+
+## Functions the simulation code relies on
+
+```{r, comment = ""}
+cat(readLines("functions.R"), sep = "\n")
+```

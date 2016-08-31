@@ -3,9 +3,23 @@
 *.pdf
 *.log
 chapter_2/figs/*
-chapter_2/archive/*
-chapter_3/*
+*/archive/*
 figs/*
 *.log
 *.aux
 *.png
+*.bbl
+*.bcf
+*.blg
+*.xml
+*.synctex.gx
+*/.Rproj.user
+*/*_cache/*
+*/*_files/*
+*.RData
+*.rdx
+*.rdb
+chapter_3/Large cluster AQ simulation/mll_large_clusters_cache/latex/__packages
+*.gz
+*.Ya4604
+*.Rproj
