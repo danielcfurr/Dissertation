@@ -23,3 +23,9 @@ chapter_3/Large cluster AQ simulation/mll_large_clusters_cache/latex/__packages
 *.gz
 *.Ya4604
 *.Rproj
+chapter_3/chapter_3-concordance.tex
+chapter_3/functions_old.R
+chapter_4/chapter_4-concordance.tex
+chapter_4/chapter_4.tex
+chapter_3/mll_large_clusters.Rmd
+chapter_3/chapter_3.tex

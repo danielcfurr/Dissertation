@@ -1,0 +1,261 @@
+\documentclass{article}
+\usepackage[left=1.00in, right=1.00in, top=1.00in, bottom=1.00in]{geometry}
+
+\usepackage[american]{babel}
+\usepackage{csquotes}
+\usepackage[backend=biber, style=apa]{biblatex}
+\DeclareLanguageMapping{american}{american-apa}
+\bibliography{../../../Documents/References/references.bib}
+
+\begin{document}
+\SweaveOpts{concordance = TRUE, echo = FALSE, height = 3}
+
+\author{Daniel C. Furr}
+\date{\today}
+\title{Chapter 3: Conditional and marginal information criteria for item response models}
+\maketitle
+
+<<setup>>=
+library(reshape2, quietly = TRUE)
+library(ggplot2, quietly = TRUE)
+
+# Load analysis results or else run analysis
+if(file.exists("chapter_4.Rdata")) {
+  load("chapter_4.Rdata")
+} else {
+  source("chapter_4.R")
+}
+
+# Function for printing numbers
+f <- function(x, digits = 2) {
+  formatC(x, digits = digits, big.mark = ",", format = "f")
+}
+@
+
+<<preliminary>>=
+# Get info on Rhat to report
+sum_mat <- do.call(rbind, summary_list)
+exclude <- grepl("^(.*_fix|.*_unit|theta|lp__).*$",
+                 rownames(sum_mat))
+max_rhat <- max(sum_mat[!exclude, "Rhat"])
+
+# Set up data frame to use in later chunks
+# Make long form with estimates and mc errors on same row
+df_long <- melt(df, id.vars = c("model", "chain", "focus"))
+df_mcerror <- aggregate(value ~ model + focus + variable,
+                        data = subset(df_long, chain > 0),
+                        FUN = function(x) sd(x)/sqrt(length(x)))
+names(df_mcerror)[names(df_mcerror) == "value"] <- "mcerror"
+df <- merge(subset(df_long, chain == 0), df_mcerror)
+df$chain <- NULL
+
+# Further reformat data frame
+df$variable <- as.character(df$variable)
+df$variable[df$variable == "p_04"] <- "p_04_waic"
+df$variable[df$variable == "pk_05"] <- "pk_05_loo"
+df$variable[df$variable == "pk_10"] <- "pk_10_loo"
+df$IC <- toupper(gsub("^.*_", "", df$variable))
+df$IC <- factor(df$IC, c("LPD", "DIC", "WAIC", "LOO"))
+df$variable[toupper(df$variable) == df$IC] <- "ic"
+df$variable <- gsub("_(lpd|dic|waic|loo)$", "", df$variable)
+df$Model <- as.factor(df$model)
+@
+
+
+\section{Models and data}
+
+A latent regression Rasch model is fit to a dataset on verbal aggression that consists of $J = \Sexpr{data_list$J}$ persons and $I = \Sexpr{data_list$I}$ items. The items have been dichotomized for this example. The model is
+\begin{equation}
+  \Pr(y_{ij} = 1 | w_j, \gamma, \zeta_j, \delta_i) =
+  \mathrm{logit}^{-1}(w_j' \gamma + \zeta_j - \delta_i),
+\end{equation}
+where $y_{ij} = 1$ if the response for person $j$ to item $i$ is correct, $w_j$ is a vector of person-related covariates, $\gamma$ is a vector of latent regression coefficients, $\zeta_j$ is a person residual, and $\delta_i$ is an item difficulty parameter. One element of $w_j$ will be an intercept term. The priors are
+$\zeta_j \sim \mathrm{N}(0, \sigma^2)$,
+$\delta_i \sim \mathrm{N}(0, \tau^2)$,
+$\gamma \sim \mathrm{N}(0, 4)$,
+$\sigma \sim \mathrm{Exp}(.1)$, and
+$\tau \sim \mathrm{Exp}(.1)$.
+
+The covariates are: (1) the respondent's trait anger score, which has been standardized to have a mean of zero and standard deviation of one, and (2) an indicator for whether the respondent is male. Five competing models are considered, differing only in what covariates are included: Model 1 includes no covariates, Model 2 has the trait anger score, Model 3 has the indicator for male, Model 4 has both covariates, and Model 5 has both covariates and their interaction. All models include an intercept term.
+
+
+\section{Conditional and marginal focus}
+
+Three variants of the log-likelihood are considered for calculating DIC, WAIC, and LOO-IC:
+
+\begin{enumerate}
+
+\item The conditional log-likelihood closely matches the above equation. It is
+\begin{equation}
+  L_{ij}^{(s)} =
+  \log \Pr(y_{ij} | w_j' \gamma^{(s)}, \zeta_j^{(s)}, \delta_i^{(s)}).
+\end{equation}
+For the verbal aggression data, there are
+$I \times J = \Sexpr{f(data_list$N,0)}$
+likelihood units for the conditional case. Like the variants that follow, it is calculated separately for each Monte Carlo iteration $s$. This corresponds to the ``conditional'' focus mentioned by \textcite{Spiegelhalter2002}.
+
+\item The aggregated conditional log-likelihood aggregates the conditional log-likelihood to the person-level, summing over items. It is
+\begin{equation}
+  L_{j}^{(s)} = \sum_{i=1}^I \log
+  \Pr(y_{ij} | w_j' \gamma^{(s)}, \zeta_j^{(s)}, \delta_i^{(s)}),
+\end{equation}
+where $I$ is the number of items. This approach involves $J = \Sexpr{data_list$J}$ likelihood units for the example data. The possibility of aggregating the likelihood in this way is mentioned by Vehtari, Gelman, and Gabry (2016, p. 8). The conditional and aggregated conditional log-likelihoods will yield identical results when calculating DIC but not WAIC or LOO-IC.
+
+\item The marginal log-likelihood integrates $\zeta_j$ over its prior distribution to yield a marginal log-likelihood for each person. It is
+\begin{equation}
+	M_{j}^{(s)} = \log
+	\int
+		\left [ \prod_{i=1}^I \Pr(y_{ij} | w_j' \gamma^{(s)}, \zeta_j^{(s)}, \delta_i^{(s)}) \right ]
+		p(\zeta_j^{(s)} | \sigma^{(s)})
+	~d \zeta_j^{(s)}.
+\end{equation}
+This also entails $J = \Sexpr{data_list$J}$ likelihood units. This corresponds to the ``marginal'' focus mentioned by \textcite{Spiegelhalter2002}..
+
+\end{enumerate}
+
+
+\section{Estimation}
+
+The five models are estimated using Stan for \Sexpr{n_chains} chains of \Sexpr{f(n_iter)} draws with the first \Sexpr{f(n_warmup)} draws of each discarded, resulting in a total of
+\Sexpr{f(n_posterior,2)}
+kept posterior draws. The $\hat R$ convergence statistic was \Sexpr{f(max_rhat,2)} or less for the aforementioned parameters across models. DIC, WAIC, and LOO-IC were computed for the three types of likelihoods. \Sexpr{n_agq} adaptive quadrature points to approximate the integration of $\zeta_j$ over its prior for the marginal likeliood.
+
+Running so many chains is unusual. It is done here to obtain rough estimates of Monte Carlo error for DIC, WAIC, and LOO-IC. The Monte Carlo error is estimated as the standard deviation between chains divided by the square root of the number of chains, as suggested by Vehtari, Gelman, and Gabry (2016, p. 20). In more ordinary application, where we may be interested simply in the parameter posteriors, 1,000 total posterior draws obtained from a few chains would be sufficient to obtain minimal Monte Carlo error for the parameters, but as will be seen in the following sections, information criteria are particularly prone to exhibiting high Monte Carlo error.
+
+
+\section{Diagnostics}
+
+For WAIC, the contribution of an observation to the effective number of parameters should be no more than .4 (Vehtari, Gelman, and Gabry, 2016, p. 12). For LOO-IC, the shape parameter ($k$) for the generalized Pareto distribution used in smoothing the importance weights for a single observation should be less than .5 to ensure that the mean and variance of the raw importance weights distribution exists. Further, the shape parameter should be less than 1 to ensure that at least the mean exists, though the variance will be infinite (Vehtari, Gelman, and Gabry, 2016, p. 5). Figure~\ref{fig:diagnostics} provides the percentage of likelihood units (observations) exhibiting these problems separately for each type of focus.
+
+<<diagnostics>>=
+df_diagnostic <- subset(df, variable %in% c("p_04", "pk_05", "pk_10"))
+key_var <- c(p_04 = "p > .4", pk_05 = "k > .5", pk_10 = "k > 1")
+df_diagnostic$variable <- factor(key_var[df_diagnostic$variable],
+                                 levels = key_var)
+key_n <- c("Conditional" = data_list$N, "Aggregated conditional" = data_list$J,
+             "Marginal" = data_list$J)
+df_diagnostic$n <- key_n[df_diagnostic$focus]
+df_diagnostic$percent <- df_diagnostic$value / df_diagnostic$n * 100
+ggplot(df_diagnostic) +
+  aes(x = variable, y = percent, fill = Model) +
+  geom_bar(position = "dodge", stat = "identity") +
+  facet_wrap(~focus) +
+  labs(x = NULL, y = "Percent of likelihood units")
+@
+\begin{figure}
+\begin{center}
+<<diagnostics_plot, fig=TRUE, echo=FALSE>>=
+<<diagnostics>>
+@
+\end{center}
+\caption{Diagnostics}
+\label{fig:diagnostics}
+\end{figure}
+
+There are clear problems with information criteria using the aggregated conditional log-likelihood. For WAIC all likelihood units contribute more than .4 effective parameters, and for LOO-IC all likelihood units have $k > .5$. On the other hand, no such problems were encountered with either the (standard) conditional or marginal focus. \emph{((Does DIC have any sort of diagnostics?))}
+
+
+\section{Effective number of parameters}
+
+Table~\ref{tab:effn} provides the estimated effective number of parameters across models for the three forms of information criteria. Monte Carlo errors are provided in parentheses.
+
+For the conditional focus, the vector $\zeta$ contributes between 1 and 316 effective parameters, depending on the informativeness of prior distribution. \emph{((Does this statement make sense with a hierarchical prior?))}S Likewise, the vector $\delta$ contributes between 1 and 24 effective parameters, and $\gamma$ should contribute about 1 effective parameter per element given that only a weakly informative prior is placed on it. The result is a large number of effective parameters, but this is dwarfed by the
+$I \times J = \Sexpr{f(data_list$N,0)}$
+likelihood units.
+
+For the marginal focus, the distribution of $\zeta$ given $\sigma$ is expected to contribute 1 effective parameter, that being $\sigma$. $\delta$ and $\gamma$ are expected to make the same contributions as in the conditional case. Consider that for Model 1 (intercept only) WAIC and LOO-IC both suggest an effective number of parameters of about $I + 1 = 25$, which matches the number of parameters associated with marginal maximum likelihood estimation of the standard Rasch model. In fact, all models have approximately $I + G_m$ parameters, where $G_m$ is the number of elements in $\gamma$. DIC follows a similar trend, though it suggests slightly lower effective numbers of parameters.
+
+For the aggregated conditional approach, the effective number of parameters approaches the $J = \Sexpr{f(data_list$J,0)}$ likelihood units. For this reason WAIC is inappropriate. \emph{((I suppose this also causes problems for DIC and LOO-IC?))} For this reason, the aggregated conditional approach will not be considered further.
+
+\begin{table}[htb]
+\centering
+<<parameters, results = tex>>=
+library(xtable)
+df_tab <- subset(df, variable == "p")
+df_tab$cell <- paste0(sprintf("%1.1f", df_tab$value), " (",
+                      sprintf("%1.2f", df_tab$mcerror), ")")
+tab <- dcast(df_tab, focus + IC ~ model, value.var = "cell")
+xtab <- xtable(tab, align = "lllrrrrr")
+print(xtab, include.rownames = FALSE, floating = FALSE,
+      hline.after = c(-1, 0, nrow(xtab), 3, 6))
+@
+\caption{Effective number of parameters.}
+\label{tab:effn}
+\end{table}
+
+
+\section{Selection and Monte Carlo error}
+
+Figure~\ref{fig:mcerror} provides the estimates of marginal and conditional DIC, WAIC, and LOO-IC along with vertical lines indicating $\pm 1$ Monte Carlo error. For the conditional focus, all three of DIC, WAIC, and LOO-IC were lowest for Model 5. However, the magnitude of the estimated Monte Carlo errors renders this conclusion unreliable. (In preliminary analysis, the selected model varied under repeated estimation.) Clearly, many more posterior draws would be required to reliably select a preferred model with the conditional focus. On the other hand, the marginal focus yields much smaller Monte Carlo errors, allowing for some confidence in preferring Model 4 for each criteria.
+
+<<mcerror>>=
+df_mcerror <- subset(df, variable == "ic" & focus != "Aggregated conditional")
+ggplot(df_mcerror) +
+  aes(x = Model, y = value, ymin = value - mcerror, ymax = value + mcerror,
+      color = IC, pch = IC) +
+  geom_pointrange(position = position_dodge(width = .65)) +
+  facet_wrap(~focus, scales = "free_y") +
+  labs(y = NULL, colour = NULL, pch = NULL)
+@
+\begin{figure}
+\begin{center}
+<<mcerror_plot, fig = TRUE>>=
+<<mcerror>>
+@
+\end{center}
+\caption{Monte Carlo error}
+\label{fig:mcerror}
+\end{figure}
+
+<<mcerror_numbers>>=
+# Calculate the ranges for the IC estimates and assemble into vectors that I
+# can call in the text.
+
+ic_agg <- aggregate(value ~ focus + IC, data = df_mcerror,
+                    FUN = function(x) max(x) - min(x))
+
+ic_cond <- ic_agg[ic_agg$focus == "Conditional", "value"]
+ic_cond <- sprintf("%0.2f", ic_cond)
+names(ic_cond) <- ic_agg[ic_agg$focus == "Conditional", "IC"]
+
+ic_marg <- ic_agg[ic_agg$focus == "Marginal", "value"]
+ic_marg <- sprintf("%0.2f", ic_marg)
+names(ic_marg) <- ic_agg[ic_agg$focus == "Marginal", "IC"]
+
+# Calculate the means for Monte Carlo errors and assemble into vectors that I
+# can call in the text.
+
+mcerror_agg <- aggregate(mcerror ~ focus + IC, data = df_mcerror,
+                         FUN = mean)
+
+mcerror_cond <- mcerror_agg[mcerror_agg$focus == "Conditional", "mcerror"]
+mcerror_cond <- sprintf("%0.2f", mcerror_cond)
+names(mcerror_cond) <- mcerror_agg[mcerror_agg$focus == "Conditional", "IC"]
+
+mcerror_marg <- mcerror_agg[mcerror_agg$focus == "Marginal", "mcerror"]
+mcerror_marg <- sprintf("%0.2f", mcerror_marg)
+names(mcerror_marg) <- mcerror_agg[mcerror_agg$focus == "Marginal", "IC"]
+@
+
+The conditional focus suffers from a narrower range of IC estimates (across models) coupled with larger Monte Carlo error. For the conditional focus, the ranges (maximums minus minimums) were
+\Sexpr{f(ic_cond["DIC"])},
+\Sexpr{f(ic_cond["WAIC"])}, and
+\Sexpr{f(ic_cond["LOO"])}
+for DIC, WAIC, and LOO-IC, respectively, compared to
+\Sexpr{f(ic_marg["DIC"])},
+\Sexpr{f(ic_marg["WAIC"])}, and
+\Sexpr{f(ic_marg["LOO"])}
+for the marginal focus. Meanwhile, on average the Monte Carlo errors for the conditional focus were
+\Sexpr{f(mcerror_cond["DIC"])},
+\Sexpr{f(mcerror_cond["WAIC"])}, and
+\Sexpr{f(mcerror_cond["LOO"])}
+compared to
+\Sexpr{f(mcerror_marg["DIC"])},
+\Sexpr{f(mcerror_marg["WAIC"])}, and
+\Sexpr{f(mcerror_marg["LOO"])}
+for the marginal focus. In general, the choice of conditional versus marginal focus should depend on the prediction inference being made, but in situations in which either focus is suitable, the marginal focus may be preferable for this reason.
+
+
+\printbibliography
+
+\end{document}

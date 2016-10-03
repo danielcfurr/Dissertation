@@ -1,0 +1,312 @@
+\documentclass{article}
+\usepackage[left=1.00in, right=1.00in, top=1.00in, bottom=1.00in]{geometry}
+
+\begin{document}
+\SweaveOpts{concordance = TRUE, echo = FALSE, align = center}
+
+\author{Daniel C. Furr}
+\date{\today}
+\title{Chapter 3: Marginal information criteria using adaptive quadrature}
+\maketitle
+
+<<>>=
+library(ggplot2)
+library(reshape2)
+library(xtable)
+load("chapter_3.Rdata")
+
+numword <- function(x, cap = FALSE) {
+  words <- c("one", "two", "three", "four", "five", "six", "seven",
+             "eight", "nine", "ten", "eleven", "twelve", "thirteen",
+             "fourteen", "fifteen", "sixteen", "seventeen", "eighteen",
+             "nineteen", "twenty")
+  if(x > length(words)) {
+    return(x)
+  } else if(cap) {
+    word <- words[x]
+    capped <- paste0(toupper(substr(word, 1, 1)), substr(word, 2, nchar(word)))
+    return(capped)
+  } else {
+    return(words[x])
+  }
+}
+
+# Function for printing numbers
+f <- function(x, digits = 2) {
+  formatC(x, digits = digits, big.mark = ",", format = "f")
+}
+
+# Function for printing list of numbers in text
+and <- function(x) {
+  l <- length(x)
+  if(l == 1) {
+    x
+  } else if(l == 2) {
+    paste(x, collapse = " and ")
+  } else if(l > 2) {
+    part <- paste(x[-l], collapse = ", ")
+    paste(part, x[l], sep = ", and ")
+  }
+}
+
+# Function to format simulation results
+df_reformat <- function(df, ic = "waic") {
+
+  # Add in NA columns from other IC that may not be here already
+  for(lbl in c("p_04", "pk_05", "pk_10")) {
+    if(! lbl %in% colnames(df)) df[, lbl] <- NA
+  }
+
+  # Standardize names between IC
+  names(df)[names(df) %in% c("waic", "looic")] <- "value"
+  names(df) <- gsub("_(waic|loo|looic)$", "", names(df))
+
+  # Put MVN results on same rows as AGQ
+  df_l <- subset(df, method != "MVN")
+  df_l$nodes <- as.numeric(gsub("^.*: ", "", df_l$method))
+  df_r <- subset(df, method == "MVN", -c(method, secs))
+  names_to_change <- names(df_r)[names(df_r) != "I"]
+  new_names <- paste0("mvn_", names_to_change)
+  names(df_r)[names(df_r) %in% names_to_change] <- new_names
+  df_merge <- merge(df_l, df_r)
+
+  # Calculate differences between AGQ and MVN
+  df_dif <- df_merge[, names_to_change] - df_merge[, new_names]
+  dif_names <- paste0("dif_", names_to_change)
+  names(df_dif)[names(df_dif) %in% names_to_change] <- dif_names
+
+  # Append column for IC type and calculate differences between n nodes
+  df_final <- cbind(df_merge, df_dif)
+  df_final$IC <- ic
+  rng <- 2:nrow(df_final)
+  df_final$change <- NA
+  df_final$change[rng] <- df_final$value[rng] - df_final$value[rng - 1]
+  df_final$change[df_final$nodes == min(df_final$nodes)] <- NA
+
+  return(df_final)
+
+}
+
+df_w <- df_reformat(df_waic, ic = "WAIC")
+df_l <- df_reformat(df_loo, ic = "LOO-IC")
+df <- rbind(df_w, df_l[, names(df_w)])
+df$IC <- factor(df$IC, c("WAIC", "LOO-IC")) # For ordering plots
+
+my_theme <- theme(text = element_text(family = "serif"),
+                  panel.grid.minor.x = element_blank())
+@
+
+
+\section{Introduction}
+
+In this chapter, adaptive quadrature for Monte Carlo Markov chain simulation is developed for the numerical integration required for obtaining marginal likelihoods. Adaptive quadrature may be used with models having a variety of distributions for the response variable so long as the parameters to be integrated out are modeled as normally distributed. For models with normal response variables, the marginal likelihood may be evaluated analytically with the multivariate normal density function, providing exact results. A simulation compares Widely Applicable Information Criteria (WAIC) and Leave-One-Out Information Criteria (LOO-IC) estimates derived from both analystical and numerical integration, using the the analytical results to assess the accuracy of adaptive quadrature.
+
+
+\section{Model and data}
+
+Data are generated in accordance with a linear random intercept model:
+\begin{equation}
+  y_{ij} = x_j'\beta + \zeta_j + \epsilon_{ij}
+,\end{equation}
+where $i = 1 \ldots I$ indexes observations within cluster $j$, $j = 1 \ldots J$.
+Further, the ``fixed'' part of the model is:
+\begin{equation}
+  x_j'\beta = \beta_0 + \beta_1 x_{1j} + \beta_2 x_{2j} + \beta_3 x_{3j} +
+  \beta_4 x_{1j} x_{2j} + \beta_5 x_{2j} x_{3j}
+.\end{equation}
+The priors are
+$\beta \sim \mathrm{U}(-\infty, \infty)$,
+$\epsilon_{ij} \sim \mathrm{N}(0, \sigma^2)$
+$\zeta_j \sim \mathrm{N}(0, \psi^2)$,
+$\sigma \sim \mathrm{Exp}(.1)$, and
+$\psi \sim \mathrm{Exp}(.1)$.
+The generating parameters are:
+$\sigma = \Sexpr{sim_sigma}$,
+$\psi = \Sexpr{sim_psi}$, and
+$\beta = \{\Sexpr{paste(sim_beta, collapse=",")}\}$.
+One dataset is simulated for each cluster size
+$I \in \{\Sexpr{paste(sim_I,collapse=",")}\}$.
+Each dataset has $J = \Sexpr{sim_J}$ clusters, and the covariates in $x_j$ are random draws from a standard normal distribution.
+
+Bayes theorem indicates that the posterior for the parameters is
+\begin{equation}
+  p(\omega | y, x) \propto
+    \left [ \prod_{j=1}^J \prod_{i=1}^I \Pr(y_{ij} | x_j, \omega) \right ]
+    p(\omega)
+,\end{equation}
+where $\omega$ is the set of all model parameters, including $\zeta_j$, and
+\begin{equation}
+  \Pr(y_{ij} | x_j, \omega) = \phi(y_{ij}; x_j'\beta + \zeta_j, \sigma^2)
+\end{equation}
+is the ``conditional'' likelihood. $\phi$ is the normal density function.
+In MCMC simulation it is evaluated at each iteration $s$ as
+\begin{equation}
+  \Pr(y_{ij} | x_j, \omega^{(s)}) =
+    \phi \left( y_{ij}; x_j'\beta^{(s)} + \zeta_j^{(s)}, (\sigma^{(s)})^2 \right)
+.\end{equation}
+
+
+\section{Marginal likelihood}
+
+The marginal likelihood for a cluster at MCMC iteration $s$ is
+\begin{equation} \label{eq:3-mvn}
+  \mathrm{ML}_j^{(s)} = \Phi \left(y_j; x_j'\beta^{(s)}, \Omega^{(s)} \right)
+,\end{equation}
+where $\Phi$ is the multivariate normal density function, $y_j$ is the vector of responses for cluster $j$, and $\Omega^{(s)}$ is an $I$-by-$I$ covariance matrix with elements on the diagonal equal to $(\psi^{(s)})^2 + (\sigma^{(s)})^2$ and elements on the off-diagonal equal to $(\psi^{(s)})^2$. It may be approximated using an adaptive quadrature scheme in which standard Gaussian quadrature node locations and weights, denoted as $G_{\mathrm{std},m}$ and $W_{\mathrm{std},m}$ for a given node $m$ ($m = 1 \cdots M$), are adjusted based on the posterior mean and standard deviation for the residual $\zeta_j$. 
+
+The posterior mean for $\zeta_j$ is
+\begin{equation}
+  \hat \mu_j = \hat \mathbf{E}(\zeta_j | y_j, x_j)
+             = \frac{1}{S} \sum_{s=1}^S \zeta_j^{(s)}
+,\end{equation}
+and the posterior standard deviation is
+\begin{equation}
+  \hat \tau_j = \sqrt{\widehat\mathrm{var}(\zeta_j | y_j, x_j) }
+              = \frac{1}{S-1} \sum_{s=1}^S
+                  \left(\zeta_j^{(s)} - \hat \mu_j \right)^2
+.\end{equation}
+The adaptive quadrature node locations are then
+\begin{equation}
+  \mathrm{G}_{jm} = \hat \mu_j +
+                    \hat \tau_j \times
+                    \mathrm{G}_{\mathrm{std},m}
+,\end{equation}
+and their weights are
+\begin{equation}
+  \mathrm{W}_{jm}^{(s)} = \sqrt{2\pi} \times
+        \hat \tau_j \times
+        \exp \left ( \frac{\mathrm{G}_{jm}^2}{2} \right ) \times
+        \phi \left ( \mathrm{G}_{jm}; 0, (\psi^{(s)})^2 \right ) \times
+        W_{\mathrm{std},m}
+.\end{equation}
+The adaptive quadrature node locations will differ between clusters, while the weights will differ between both clusters and MCMC iterations. The marginal likelihood is approximated as a weighted sum:
+\begin{equation}
+  \mathrm{ML}_j^{(s)} \approx
+    \sum_{m=1}^M
+    \left [
+      \mathrm{W}_{jm}^{(s)}
+      \prod_{i=1}^I
+        \phi \left ( y_{ij}; x_j' \beta + \mathrm{G}_{jm},
+                                    (\sigma^{(s)})^2 \right )
+    \right ]
+.\end{equation}
+For models with normally distributed responses, using the multivariate normal density in Equation~\ref{eq:3-mvn} is preferrable as the calculation is easy and exact. However, the adaptive quadrature method may be used whatever distribution the responses take, so long as the parameter to be integrated out is normally distributed.
+
+
+\section{Results}
+
+First, marginal information criteria for the \Sexpr{numword(length(sim_I))} simulated datasets, based on using the multivariate normal density to evaluate the marginal log-lihood, are presented in Table~\ref{tab:3-icmvn}. The lpd is the log pointwise density, calculated as the mean of posterior marginal likelihood (Equation~\ref{eq:3-mvn}) summed over clusters, p is the effective number of parameters, $\mathrm{elpd} = \mathrm{lpd} - \mathrm{p}$ is the expected log pointwise density. The values customarily reported for WAIC or LOO-IC are $-2 \times \mathrm{elpd}$, which is the focus of the results that follow.
+
+\begin{table}
+\centering
+<<icmvn, results = tex>>=
+df_mvn <- unique(df[c("I", "IC", grep("^mvn_.*$", names(df), value = TRUE))])
+names(df_mvn) <- gsub("^mvn_", "", names(df_mvn))
+df_mvn <- df_mvn[, c("IC", "I", "value", "elpd", "p")]
+df_mvn$lpd <- df_mvn$elpd + df_mvn$p
+df_mvn$elpd <- NULL
+
+df_mvn$IC <- as.character(df_mvn$IC)
+df_mvn$IC[df_mvn$I != min(sim_I)] <- ""
+names(df_mvn)[names(df_mvn) == "IC"] <- ""
+names(df_mvn)[names(df_mvn) == "I"] <- "$I$"
+names(df_mvn)[names(df_mvn) == "value"] <- "$-2 \\times \\mathrm{elpd}$"
+
+last_displays <- rep("f", times = ncol(df_mvn) - 2)
+xtab_mvn <- xtable(df_mvn, display = c("s", "s", "d", last_displays))
+add_hlines <- which(1:nrow(xtab_mvn) %% length(sim_I) == 0)
+print(xtab_mvn, include.rownames = FALSE, floating = FALSE,
+      hline.after = c(-1, 0, add_hlines),
+      sanitize.colnames.function = function(x) x)
+@
+\caption{Marginal information criteria for the simulated datasets using the multivariate normal density. The values customarily reported for WAIC and LOO-IC are $-2 \times \mathrm{elpd} = -2 \times (\mathrm{lpd} - \mathrm{p})$, where p is the estimated penalty and lpd is the log pointwise density.}
+\label{tab:3-icmvn}
+\end{table}
+
+<<compare_text>>=
+# For in text, what number of nodes results in minimal change
+which_compare <- aggregate(dif_value ~ I + IC, data = df,
+                           function(x) which(abs(x) < .01)[1])
+which_compare$nodes <- sim_nodes[which_compare$dif_value]
+@
+
+Next, the marginal information criteria are calculated using \Sexpr{and(sim_nodes)} adaptive quadrature nodes. The difference between results derived from the multivariate normal density and adaptive quadrature are shown in Figure~\ref{fig:3-compare}. For WAIC, a difference less than .01 is achieved by using
+\Sexpr{and(unlist(subset(which_compare, IC == "WAIC", nodes)))}
+nodes for cluster sizes
+$I =$ \Sexpr{and(unlist(subset(which_compare, IC == "WAIC", I)))},
+respectively. For LOO-IC, the same is obtained using
+\Sexpr{and(unlist(subset(which_compare, IC == "LOO-IC", nodes)))}
+nodes. Judging a difference of .01 to be a sufficiently close approximation is somewhat arbitrary but should be conservative unless the information criteria values are very close.
+
+<<compare>>=
+# Plot
+spread_x <- max(sim_nodes) - min(sim_nodes)
+ggplot(df) + my_theme +
+  aes(x = nodes, y = dif_value, color = as.factor(I), pch = as.factor(I)) +
+  geom_line(show.legend = FALSE) + geom_point(show.legend = FALSE) +
+  geom_text(data = subset(df, nodes == sim_nodes[1]),
+            mapping = aes(label = paste0("italic(I)==", I)), parse = TRUE,
+            hjust = "right", nudge_x = -spread_x*.03, show.legend = FALSE) +
+  expand_limits(x = sim_nodes[1] - spread_x*.2) +
+  scale_x_continuous(breaks = sim_nodes) +
+  facet_wrap(~IC) +
+  xlab(expression(paste("Number of adaptive Gaussian quadrature nodes (",
+                         italic(M), ")"))) +
+  ylab("Difference from exact integration")
+@
+\begin{figure}[tb]
+\begin{center}
+<<compare_plot, fig = TRUE, height = 3.5>>=
+<<compare>>
+@
+\end{center}
+\caption{Differences in information criteria ($-2 \times \mathrm{elpd}$) between using adaptive quadrature (approximate method) and using the multivariate normal density function (exact method).}
+\label{fig:3-compare}
+\end{figure}
+
+<<quadcheck_text>>=
+# For in text, what number of nodes results in minimal change
+which_quadchk <- aggregate(change ~ I + IC,
+                           data = subset(df, ! is.na(change)),
+                           function(x) which(abs(x) < .01)[1])
+which_quadchk$nodes <- sim_nodes[which_quadchk$change]
+@
+
+In general, adaptive quadrature will only be used when an exact calculation is not available, and so a sufficient number of nodes cannot be determined by comparison to the exact calculation. In this case, results may be obtained for one choice of number of nodes $M$ and compared to those for few nodes, for example $\frac{2}{3}M$. If the difference is negligable, perhaps less than .01, then $M$ may be judged sufficient. If the difference is too great, a yet larger number of nodes may be tried (such as $\frac{3}{2}M$) and compared against the results from $M$ nodes. This process may be continued until the results stabilitized. The choices of increasing the number of nodes by 50\% and declaring .01 a neglibable difference is arbitrary, and the choices are expected to be conservative. The values $M =$ \Sexpr{and(sim_nodes)} were chosen to follow this pattern.
+
+Figure~\ref{fig:3-quadcheck} shows the results of employing this strategy for choosing a number of nodes. For WAIC, results differed by less than .01 with
+\Sexpr{and(unlist(subset(which_quadchk, IC == "WAIC", nodes)))}
+nodes for cluster sizes
+$I =$ \Sexpr{and(unlist(subset(which_quadchk, IC == "WAIC", I)))},
+respectively. For LOO-IC, the same is obtained using
+\Sexpr{and(unlist(subset(which_quadchk, IC == "LOO-IC", nodes)))}
+nodes. It is expected that this strategy will either select a number of nodes equal that selected by comparison to the multivariate normal density or the next larger number of nodes.
+
+<<quadcheck>>=
+# Plot
+spread_x <- max(sim_nodes[-1]) - min(sim_nodes[-1])
+ggplot(subset(df, ! is.na(change))) + my_theme +
+  aes(x = nodes, y = change, color = as.factor(I), pch = as.factor(I)) +
+  geom_line(show.legend = FALSE) + geom_point(show.legend = FALSE) +
+  geom_text(data = subset(df, nodes == sim_nodes[2]),
+            mapping = aes(label = paste0("italic(I)==", I)), parse = TRUE,
+            hjust = "right", nudge_x = -spread_x*.03, show.legend = FALSE) +
+  expand_limits(x = sim_nodes[2] - spread_x*.2) +
+  scale_x_continuous(breaks = sim_nodes[-1]) +
+  facet_wrap(~IC) +
+  xlab(expression(paste("Number of adaptive Gaussian quadrature nodes (",
+                         italic(M), ")"))) +
+  ylab("Difference from previous number of nodes")
+@
+\begin{figure}[tb]
+\begin{center}
+<<quadcheck_plot, fig = TRUE, height = 3.5>>=
+<<quadcheck>>
+@
+\end{center}
+\caption{Differences in information criteria ($-2 \times \mathrm{elpd}$) between using $M$ adaptive quadrature nodes and $\approx \frac{2}{3}M$ nodes.}
+\label{fig:3-quadcheck}
+\end{figure}
+
+
+\end{document}
