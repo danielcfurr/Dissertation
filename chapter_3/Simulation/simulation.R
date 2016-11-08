@@ -24,13 +24,15 @@ library(rstan)
 library(loo)
 library(doParallel)
 library(foreach)
+library(mvtnorm)
+library(reshape2)
 
 options(loo.cores = n_cores)
 options(mc.cores = n_cores)
 
 compile <- stan_model(file = "rim_mvn.stan")
 
-source("functions.R")
+source("../functions.R")
 
 
 # Functions --------------------------------------------------------------------
@@ -98,7 +100,11 @@ f_marginal <- function(node, r, iter, data_list, draws) {
 
 # Simulation -------------------------------------------------------------------
 
-result_list <- list()
+# result_list <- list()
+dic_list <- list()
+waic_list <- list()
+loo_list <- list()
+l <- 0
 
 start <- Sys.time()
 for(i in 1:length(sim_I)) {
@@ -112,12 +118,27 @@ for(i in 1:length(sim_I)) {
 
   # Get results from Stan fit itself
   post_draws <- extract(fit)
-  mvn_df <- as.data.frame(post_draws$mll_j)
-  mvn_df$method <- "MVN"
-  mvn_df$I <- sim_I[i]
-  mvn_df$iter <- 1:nrow(mvn_df)
-  mvn_df$secs <- 0
-  result_list[[length(result_list) + 1]] <- mvn_df
+  ll_obj <- list(ll = post_draws$mll_j, best_ll = numeric(sim_J))
+
+  # Complications required for DIC - get marginal likelihood at posterior means
+  post_means <- get_posterior_mean(fit)[, "mean-all chains"]
+  beta_mean <- post_means[grepl("^beta\\[", names(post_means))]
+  eta <- data_list$X %*% beta_mean
+  sigma_mean <- post_means[grepl("^sigma$", names(post_means))]
+  psi_mean <- post_means[grepl("^psi$", names(post_means))]
+  Omega <- matrix(psi_mean^2, nrow = sim_I[i], ncol = sim_I[i]) +
+    diag(sigma_mean^2, nrow = sim_I[i], ncol = sim_I[i])
+  for(j in 1:sim_J) {
+    ll_obj$best_ll[j] <- dmvnorm(data_list$y[data_list$jj == j],
+                                 mean = rep(eta[j], times = sim_I[i]),
+                                 sigma = Omega, log = TRUE)
+  }
+
+  # Store IC results
+  l <- l + 1
+  dic_list[[l]] <- c(nagq = 0, I = sim_I[i], dic(ll_obj))
+  waic_list[[l]] <- c(nagq = 0, I = sim_I[i], waic_wrapper(ll_obj$ll))
+  loo_list[[l]] <- c(nagq = 0, I = sim_I[i], loo_wrapper(ll_obj$ll))
 
   for(n in 1:length(sim_nodes)) {
 
@@ -132,110 +153,52 @@ for(i in 1:length(sim_I)) {
       stopCluster(cl)
     })
 
-    quad_df <- as.data.frame(quad$ll)
-    quad_df$method <- paste("Adapt Quad:", sim_nodes[n])
-    quad_df$I <- sim_I[i]
-    quad_df$iter <- 1:nrow(quad_df)
-    quad_df$secs <- secs[3]
-    result_list[[length(result_list) + 1]] <- quad_df
+    # Store IC results
+    l <- l + 1
+    dic_list[[l]] <- c(nagq = sim_nodes[n], I = sim_I[i], dic(quad))
+    waic_list[[l]] <- c(nagq = sim_nodes[n], I = sim_I[i], waic_wrapper(quad$ll))
+    loo_list[[l]] <- c(nagq = sim_nodes[n], I = sim_I[i], loo_wrapper(quad$ll))
 
   }
 
 }
 
-df_wide <- do.call(rbind, result_list)
-
-waic_list <- list()
-loo_list <- list()
-idx <- unique(df_wide[, c("method", "I", "secs")])
-for(i in 1:nrow(idx)) {
-  keep <- df_wide$method == idx$method[i] & df_wide$I == idx$I[i]
-  ll <- as.matrix(df_wide[keep, 1:sim_J])
-  waic_list[[i]] <- waic_wrapper(ll)
-  loo_list[[i]] <- loo_wrapper(ll)
-}
-
-df_waic <- cbind(idx, do.call(rbind, waic_list))
-df_loo <- cbind(idx, do.call(rbind, loo_list))
-
 end <- Sys.time()
-
 end - start
 
-save(df_waic, df_loo, start, end, list = opts_list, file = "chapter_3.Rdata")
 
-# df_long <- melt(df_wide, id.vars = c("method", "I", "iter", "secs"), value.name = "mll")
-# df_long$j <- as.numeric(sub("V", "", df_long$variable))
-# df_long$variable <- NULL
-# df_mvn <- subset(df_long, method == "MVN")
-# df_mvn$method <- df_mvn$secs <- NULL
-# names(df_mvn)[names(df_mvn) == "mll"] <- "mvn"
-# df_agq <- subset(df_long, method != "MVN")
-# df_agq$nodes <- as.numeric(gsub("^.*:", "", df_agq$method))
-# df_agq$method <- NULL
-# names(df_agq)[names(df_agq) == "mll"] <- "agq"
-# df_long <- merge(df_mvn, df_agq)
-# df_long$dif <- df_long$agq - df_long$mvn
+# Assemble simulation data and save --------------------------------------------
 
-# #
-#
-# ggplot(df) +
-#   aes(x = as.factor(I), y = dif, fill = as.factor(nodes)) +
-#   geom_boxplot() +
-#   facet_wrap(~I, scales = "free_y")
-#
-# #
-#
-# pct_threshold <- function(x, t) sum(abs(x) > t) / length(x) * 100
-# df_agg <- aggregate(dif ~ I + nodes, df, pct_threshold, t = .001)
-#
-# ggplot(df_agg) +
-#   aes(x = as.factor(nodes), y = dif, fill = as.factor(nodes)) +
-#   geom_bar(stat = "identity") +
-#   facet_wrap(~I)
-#
-# #
+# Modify the lists from the simulation into data frames
+dic_df <- melt(as.data.frame(do.call(rbind, dic_list)),
+               id.vars = c("nagq", "I"))
+dic_df$IC <- "DIC"
+waic_df <- melt(as.data.frame(do.call(rbind, waic_list)),
+                id.vars = c("nagq", "I"))
+waic_df$IC <- "WAIC"
+loo_df <- melt(as.data.frame(do.call(rbind, loo_list)),
+               id.vars = c("nagq", "I"))
+loo_df$IC <- "PSIS-LOO"
 
-# mean_and_var <- function(x) c(mean = mean(x), var = var(x))
-# df_agg <- aggregate(cbind(mvn, agq) ~ j + I + nodes, df, mean_and_var)
-# df_agg$dif_mean <- df_agg$agq[, "mean"] - df_agg$mvn[, "mean"]
-# df_agg$dif_var <- df_agg$agq[, "var"] - df_agg$mvn[, "var"]
-# pct_threshold <- function(x, t) sum(abs(x) > t) / length(x) * 100
-# df_pct <- aggregate(cbind(dif_mean, dif_var) ~ I + nodes, df_agg,
-#                     pct_threshold, t = .00001)
-#
-# # Dif in mean of posterior marginal likelihood
-# ggplot(df_pct) +
-#   aes(x = as.factor(nodes), y = dif_mean, fill = as.factor(nodes)) +
-#   geom_bar(stat = "identity", show.legend = FALSE) +
-#   facet_wrap(~I)
-#
-# # Dif in variance of posterior marginal likelihood
-# ggplot(df_pct) +
-#   aes(x = as.factor(nodes), y = dif_var, fill = as.factor(nodes)) +
-#   geom_bar(stat = "identity", show.legend = FALSE) +
-#   facet_wrap(~I)
-#
-# #
+# Combine those data frames and clean up variable names
+df_combine <- rbind(dic_df, waic_df, loo_df)
+df_combine$variable <- gsub("_*(dic|waic|loo|looic)", "", df_combine$variable)
+df_combine$variable[df_combine$variable == ""] <- "dev"
 
+# Modify data frame so AGQ and MVN results are on same line
+df <- subset(df_combine,
+             variable %in% c("elpd", "p", "dev", "mean_lpd", "best_lpd"))
+df_mvn <- subset(df, nagq == 0)
+df_mvn$nagq <- NULL
+names(df_mvn)[names(df_mvn) == "value"] <- "mvn"
+names(df)[names(df) == "value"] <- "agq"
+df <- merge(subset(df, nagq > 0), df_mvn)
 
+# Sort data frame, get differences between AGQ and MVN, and N nodes
+df <- df[with(df, order(I, IC, variable, nagq)), ]
+df$dif_mvn <- df$agq - df$mvn
+df$dif_nagq <- NA
+df$dif_nagq[2:nrow(df)] <- df$agq[2:nrow(df)] - df$agq[2:nrow(df) - 1]
+df$dif_nagq[df$nagq == min(sim_nodes)] <- NA
 
-
-# Quick demo -------------------------------------------------------------------
-
-# data_list <- rim_simulate(J = 10)$stan_list_2
-# fit <- sampling(compile, data = data_list, chains = 4, iter = 100)
-#
-# cl <- makeCluster(n_cores)
-# registerDoParallel(cl)
-# m <- mll_parallel(fit, data_list, f_marginal, "zeta", "psi", 100)
-# stopCluster(cl)
-#
-# ex <- extract(fit)
-# ex$mll_j[1:3, 1:5]
-# m$ll[1:3, 1:5]
-
-
-
-
-
+save(df, df_combine, start, end, list = opts_list, file = "simulation.Rdata")

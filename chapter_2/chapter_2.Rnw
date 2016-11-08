@@ -1,0 +1,862 @@
+\documentclass{article}
+\usepackage[left=1.00in, right=1.00in, top=1.00in, bottom=1.00in]{geometry}
+
+\usepackage[american]{babel}
+\usepackage{csquotes}
+\usepackage[backend=biber, style=apa]{biblatex}
+\DeclareLanguageMapping{american}{american-apa}
+\bibliography{../../../Documents/References/references.bib}
+
+\begin{document}
+\SweaveOpts{concordance = TRUE, echo = FALSE, height = 3.5}
+
+\author{Daniel C. Furr}
+\date{\today}
+\title{Chapter 2: Frequentist approaches to model selection with item explanatory models}
+\maketitle
+
+<<setup>>=
+library(ggplot2)
+library(xtable)
+library(readstata13)
+library(grid)
+library(gridExtra)
+
+load("simulation part 2.Rdata")
+
+# tau <- sort(unique(df_bias$tau))
+# nitems <- sort(unique(df_bias$nitems))
+# n_bad_seeds <- length(bad_seeds)
+
+numword <- function(x, cap = FALSE) {
+  words <- c("one", "two", "three", "four", "five", "six", "seven",
+             "eight", "nine", "ten", "eleven", "twelve", "thirteen",
+             "fourteen", "fifteen", "sixteen", "seventeen", "eighteen",
+             "nineteen", "twenty")
+  if(x > length(words)) {
+    return(x)
+  } else if(cap) {
+    word <- words[x]
+    capped <- paste0(toupper(substr(word, 1, 1)), substr(word, 2, nchar(word)))
+    return(capped)
+  } else {
+    return(words[x])
+  }
+}
+
+# Function for printing numbers
+f <- function(x, digits = 2) {
+  formatC(x, digits = digits, big.mark = ",", format = "f")
+}
+
+# Function for printing list of numbers in text
+and <- function(x, conjunction = "and") {
+  
+  l <- length(x)
+  if(l == 1) {
+    x
+  } else if(l == 2) {
+    paste(x, collapse = paste0(" ", conjunction, " "))
+  } else if(l > 2) {
+    part <- paste(x[-l], collapse = ", ")
+    paste(part, x[l], sep = paste0(", ", conjunction, " "))
+  }
+}
+
+my_theme <- theme_bw() +
+  theme(text = element_text(family = "serif"),
+        strip.background = element_rect(fill = NA, color = NA, size = .5),
+        legend.key = element_rect(fill = NA, color = NA))
+@
+
+
+\section{Introduction}
+
+% Item explanatory models and prediction
+Several models have been developed that account for the factors associated with item difficulty: the linear logistic test model \parencite{Fischer1973}, the linear logistic test model with error \parencite{Janssen2004}, the 2PL-constrained model \parencite{embretson1999generating}, the additive multilevel item structure model \parencite{cho2014additive}, and others. Such models are described as item explanatory models by \textcite{Wilson2004}, and these models lend themselves to the prediction of item difficulties (and in some cases other item parameters) for new items. Predictions regarding new items are useful in automatic item generation, especially in regards to adaptive testing when the goal is to generate an optimally informative item during administration \parencite[see for example,][]{embretson1999generating}. Such a prediction is sometimes referred to as ``precalibration'' \parencite[see for example,][]{gierl2012automatic}. Even when item generation is not automatic, the ability to anticipate the difficulty of new items may be useful in the development of new test forms.
+
+% Prediction-based model selection
+The best set of predictors for item difficulty may not be known a priori, and in this case model selection may be employed to select a best model for the prediction of new item difficulties. A model selection scheme requires a choice of a score function to evaluate models, and the deviance ($-2$ times the log-likelihood) is a natural choice for item response models. Holdout validation, cross-validation, or information criteria may be used to select a best model from a set of candidate models on the basis of observed or expected prediction utility as judged by the score function. In holdout validation, prediction error is estimated by training a model on one dataset and evaluating the score function for the trained model in a second dataset. Cross-validation is similar but involves splitting the data multiple times and aggregating the results across splits. The Akaike Information Criterion \parencite[AIC;][]{akaike1974new} is asymptotically equivalent to cross-validation \parencite{stone1977asymptotic} but relies on only a single fit of the model. In holdout validation, the estimated prediction error is conditional on the fitted model, whereas in cross-validation and AIC it approximates the expectation over possible training datasets \parencite[][chapter~7]{Hastie2009}.
+
+% Prediction is a good basis of model selection in general
+Predictive utility is a good basis of model selection in general, even if the goal is not actually the prediction of new data. In particular, if it is believed that none of the candidate models are true, then the model that best predicts new (or holdout) data may be justified as the best available approximation to the unknown true model. For example a researcher may be interested in identifying the factors associated with item difficulty in order to learn about the cognitive or psychological theory pertaining to the latent construct. In short, the purpose of modeling item difficulty may be explanation rather than prediction, and predictive utility remains a strong basis for selecting a preferred model. It must be noted that a true model, even if it were available, may not be the most predictive model when it is estimated with finite data, owing to potential noise in the parameter estimates. In this chapter, the ``best'' or ``preferred'' model is the one that provides the most accurate prediction given the available data, and as such it will not necessarily be the true model.
+
+% Prediction and clustered data
+With models for clustered data, predictions may be for new responses or for (the latent means of) new clusters. Predictions for responses may be for new responses either from the same clusters or from new clusters. Item response models are a more complicated case than this, given that items and persons are crossed, resulting in two overlapping sets of clusters. For such data, predictions could be made regarding the latent trait for new persons (based on person-related covariates) or for the difficulty of new items (based on item-related covariates). Prediction of new responses may arise from any combination of the same or new persons and the same or new items. However, this chapter focuses only on the prediction of new item clusters.
+
+% Model and likelihood choices
+The choice of model and the associated likelihood imply what the features new (or holdout) data would have. In the generalized linear mixed model framework, models are built from ``fixed'' and ``random'' effects. Fixed effects are much like standard regression coefficients and are directly estimated. Usually fixed effects are not cluster-specific, though this is not always the case. In contrast, random effects, such as random intercepts or random coefficients, are cluster-specific. Random effects are not estimated directly, but instead estimation is focused on the parameters of their assumed joint distribution. Generalized linear mixed models are commonly fit using marginal maximum likelihood estimation, in which the random effects are integrated over their estimated distributions, and this marginalization implies that a new data collection would involve a new set of clusters. Alternatively, cluster-specific parameters could be included as fixed effects, which implies that new data would involve new observations from the same set of clusters.
+
+% Model and likelihood choices for IRT
+Rasch family item response models, including the LLTM but not the LLTM-E, are readily specified as generalized linear mixed models \parencite{Rijmen2003} and are commonly estimated using marginal maximum likelihood \parencite{Bock1981}. Items are customarily modeled as fixed effects, for example as item-specific parameters for the Rasch model or as a weighted sum of covariates for the LLTM, and persons are modeled as random effects, perhaps with fixed effects for the mean structure of the person ability distribution \parencite[for example,][]{Adams1997b} \emph{((look into more references about this))}. In this way, such models and their associated marginal likelihoods imply that persons are exchangeable, and so will be different in new data, and that items are constant across potential data collections. Using this marginal likelihood (or the associated deviance) as a score function is well-suited to the selection of models predicting person ability but poorly suited to the selection of models predicting item difficulty. The disconnect between score function and the desired prediction inference may yield misleading results in prediction-based model selection, whether holdout validation, cross-validation, or information criteria are used.
+
+% The LLTM-E2S as a solution
+The LLTM-E is associated with a likelihood that is marginal in regards to both the persons and items. Because this likelihood is marginal over the residuals for the item difficulties, the LLTM-E should be well-suited for selecting models that predict item difficulty. However, given that the model is simultaneously marginal in regard to persons, and the persons and items are crossed, it is infeasible to estimate using marginal maximum likelihood. I propose a two-stage estimation method for the LLTM-E, called the LLTM-E2S, that yields an appropriate likelihood that is marginal in regards to the items in the second stage.
+
+% This chapter
+In this chapter, simulation study results for several model selection strategies are reported for the LLTM and LLTM-E2E.  It is expected that holdout validation using a new set of items yields better item prediction results than repeating the same set of items. That may seem forgone, but a more subtle matter is that the usual application of AIC is expected to correspond to a prediction inference involving new items for the LLTM-E2S but involving the same items the LLTM, owing to differences in the construction of the likelihood. Likewise, other selection strategies, including likelihood ratio tests and BIC, may yield differing results for the two modeling strategies. In short, common selection strategies fail for the LLTM but behave reasonably for the LLTM-E2S when the goal is item prediction.
+
+
+\section{Models}
+
+
+\subsection{The linear logistic test model with error}
+
+The data generating model in the simulation study is the linear logistic test model with error \parencite[LLTM-E;][]{DeBoeck2008}:
+\begin{equation}
+	\Pr(y_{ij} = 1 | x_i, \theta_j) =
+	\mathrm{logit}^{-1} \left [ \theta_j - (x_i'\beta + \epsilon_i) \right ]
+\end{equation}
+\begin{equation}
+	\theta_j \sim \mathrm{N}(0, \sigma^2)
+\end{equation}
+\begin{equation}
+	\epsilon_i \sim \mathrm{N}(0, \tau^2)
+,\end{equation}
+where $y_{ij} = 1$ if person $j$ ($j = 1, \cdots, J$) responded to item $i$ ($i = 1, \cdots, I$) correctly and $y_{ij} = 0$ otherwise.
+Latent ability is denoted by $\theta_j$, which follows a normal distribution.
+The quantity $x_i'\beta + \epsilon_i$ is a latent regression of item difficulty in which $x_i$ is a vector of item covariates, $\beta$ is a vector of regression coefficients, and $\epsilon_i$ is a residual.
+The residual is necessary because it is unrealistic that the item covariates would perfectly account for item difficulty.
+Further, $x_i$ is a row from a matrix of item covariates $X$, which will in general include a column of ones for the intercept.
+The model may be understood as a generalization of the Rasch model \parencite{Rasch1960a} that decomposes the Rasch model difficulty parameters into a structural part ($x_i'\beta$) and residual part ($\epsilon_i$).
+Omitting the residual part from the LLTM-E yields the standard linear logistic test model \parencite[LLTM;][]{Fischer1973}.
+
+Fitting the model using marginal maximum likelihood estimation is infeasible, given the need to integrate over the vectors $\theta$ and $\epsilon$ simultaneously when calculating the marginal likelihood. Maximizing the likelihood is equivalent to minimizing the deviance, which is $-2$ times the log likelihood. The deviance for the LLTM-E is
+\begin{equation} \label{eq:lltme-likelihood}
+	\mathrm{dev}(y | \hat \omega_m(y)) = -2 \log
+		\int \cdots \int \left [
+			\prod_{i=1}^I \prod_{j=1}^J
+			\Pr(y_{ij} | \hat \beta, \epsilon_i, \theta_j)
+			\phi(\epsilon_i ; 0, \hat \tau^2)
+			\phi(\theta_j ; 0, \hat \sigma^2)
+		\right ] ~\mathrm{d} \epsilon \mathrm{d} \theta
+,\end{equation}
+where $\phi$ is the normal density function.
+The bracketed expression does not simplify and at best may be reduced from $I+J$ to $I+1$ dimensional integrals \parencite{goldstein1987multilevel, rasbash1994efficient}.
+$\hat \omega_m(y)$ is shorthand for all estimated parameters ($\hat \beta$, $\hat \sigma$, and $\hat \tau$) for model $m$, which are estimated from data $y$, and the hats on parameters denote marginal maximum likelihood estimates. For the moment it may seem redundant to indicate that the parameter estimates arise from $y$ in the notation $\hat \omega_m(y)$, but this notation will become useful later.
+
+
+\subsection{The linear logistic test model}
+
+A common model for studying the effects of item covariates, the LLTM \parencite[][]{Fischer1973}, omits the item residual $\epsilon_i$:
+\begin{equation}
+	\Pr(y_{ip} = 1 | x_i, \theta_j) =
+	\mathrm{logit}^{-1} \left [ \theta_j - x_i'\beta \right ]
+\end{equation}
+\begin{equation}
+	\theta_j \sim \mathrm{N}(0, \sigma^2)
+.\end{equation}
+Otherwise, the model is the same as the LLTM-E.
+The likelihood for the LLTM is marginal over persons but not items. Expressing the likelihood in terms of deviance,
+\begin{equation} \label{eq:lltm-likelihood}
+	\mathrm{dev}(y | \hat \omega_m(y)) =
+	-2 \sum_{j=1}^J \log
+	\int
+		\left [ \prod_{i=1}^I \Pr(y_{ij} | \hat \beta, \theta_j) \right ]
+		\phi(\theta_j ; 0, \hat \sigma^2)
+	~\mathrm{d} \theta_j
+,\end{equation}
+where $\hat \omega_m(y)$ again represents all estimated parameters, this time only $\hat \beta$ and $\hat \sigma$.
+While no closed-form solution exists for the single integration due to the logit link function, it is easily approximated, for example, by using adaptive quadrature \parencite{pinheiro1995approximations, rabe2005maximum}. 
+Indeed, the LLTM may be expressed as a generalized linear mixed model and is readily fit in standard software in addition to more specialized software for item response theory models.
+
+% The LLTM is a fundamentally incomplete model owing to the omission of $\epsilon_i$. In real applications, in which the item covariates are invariably less than perfect predictors for item difficulty, $x_i' \beta$ alone cannot hope to replicate the ``complete'' item difficulties $x_i' \beta + \epsilon_i$. Critically, the misspecification of the model in this regard results in inappropriately small standard errors for $\hat \beta$. This problem directly parallels the situation in multilevel modeling in which a non-hierarchical model is fit to clustered data.
+
+\textcite[][p. 232]{Fischer1997} recommended testing the goodness of fit of the LLTM by conducting a likelihood ratio test comparing the LLTM to the Rasch model, and the LLTM was to be interpreted only if it is not rejected. However, as he admitted, the LLTM will generally be rejected, leaving the researcher with two options: either refrain from studying the sources of item difficulty or interpret the LLTM anyway. The danger in the second option, which he did not identify, is that standard errors for the item predictors will be inappropriately small, often substantially so, when the predictions $x_i' \beta$ fail to replicate the ``complete'' item difficulties $x_i' \beta + \epsilon_i$. This problem directly parallels the situation in multilevel modeling in which a non-hierarchical model is fit to clustered data, and the omission of cluster-level residuals leads to an overstatement of the amount of information available to estimate cluster-level covariates. It will be shown later that model selection also does not work for the LLTM.
+
+
+\subsection{Two-stage estimation}
+
+To avoid the high-dimensional integral in Equation~\ref{eq:lltme-likelihood}, I propose a two-stage estimation of the LLTM-E, which I will refer to as the LLTM-E2S.
+In the first stage, the Rasch model is fit to the data. The Rasch model is
+\begin{equation}
+	\Pr(y_{ij} = 1 | \delta_i, \theta_j) =
+	\mathrm{logit}^{-1} \left [ \theta_j - \delta_i \right ]
+\end{equation}
+\begin{equation}
+	\theta_j \sim \mathrm{N}(0, \sigma^2)
+,\end{equation}
+where $\delta_i$ is an item-specific difficulty parameter.  Point estimates and standard errors for each $\hat \delta_i$ are obtained by marginal maximum likelihood estimation, minimizing a deviance similar to that in Equation~\ref{eq:lltm-likelihood}. These results are compiled into a constructed dataset of $I$ observations that includes the difficulty estimates, standard errors, and predictors for each item.
+
+In the second stage, the $\hat \delta_i$ are regressed on the item covariates using the constructed data set. This second stage model is
+\begin{equation}
+	\hat \delta_i = x_i'\beta + u_i + \epsilon_i
+\end{equation}
+\begin{equation}
+	u_i \sim \mathrm{N}(0, \widehat \mathrm{var}(\hat \delta_i))
+\end{equation}
+\begin{equation}
+	\epsilon_i \sim \mathrm{N}(0, \tau^2)
+,\end{equation}
+where $u_i$ is a residual related to uncertainty in the estimated $\hat \delta_i$, and $\epsilon_i$ is the usual residual in linear regression.
+The residual $u_i$ has known variance $\widehat \mathrm{var}(\hat \delta_i)$, which is the square of the estimated standard error for $\hat \delta_i$ obtained in the first stage.
+In contrast, the variance for $\epsilon_i$, $\tau^2$, is a model parameter to be estimated.
+This is a random-effects meta-regression model \parencite[see for example][]{raudenbush1985empirical}.
+In this context, let $\hat \omega_m(y)$ represent the set of parameter estimates from the second stage model.
+Then the deviance to be minimized in the second stage is
+\begin{equation} \label{eq:2-lltme2s-deviance}
+	\mathrm{dev}(y | \hat \omega_m(y)) = \sum_{i=1}^I -2 \log
+	% \left [
+	  \phi(\hat \delta_i ; x_i'\hat\beta, \widehat \mathrm{var}(\hat\delta_i) + \hat\tau^2)
+	% \right ]
+,\end{equation}
+where $\hat \delta_i$ are estimates carried over from the first step, and $\hat\beta$ and $\hat\tau$ are estimates obtained in the second step.
+This deviance is suitable only for the selection of an item difficulty model.
+Two-stage estimation has been used elsewhere, for example, in the regression of fixed-effects estimates of latent variables \parencite{borjas1994two} and in averaging over cluster-specific regressions \parencite{korn1979methods}.
+\emph{((Connect Borjas to this chapter, as the two are similar. Describe Korn more sepecifically.))}
+
+
+\section{Model selection strategies}
+
+
+\subsection{Holdout validation}
+
+In holdout validation, a large dataset is split into three parts: the \emph{training}, \emph{validation}, and \emph{evaluation} subsets.
+(The evaluation subset may also be referred as the test subset.)
+%The fit of models will be evaluated in terms of deviance, which is minus twice the log likelihood, and which may also be referred to as prediction error.
+In brief, parameter estimates are obtained for a model by first fitting it to the training subset and second evaluating the score function using the fitted model and the validation subset. 
+These steps are repeated for each candidate model, and in this chapter the deviance is used as the score function.
+The model with the lowest deviance in the validation subset is selected as the best model and then evaluated a second time in the evaluation subset.
+The use of a validation subset addresses the bias that would arise from both fitting and evaluating the model on the training subset.
+The use of an evaluation subset addresses the bias that would arise from selecting and evaluating a model using the validation subset alone.
+
+This chapter extends the usual holdout validation scheme by considering what elements differ or persist between the three data subsets.
+For the case of selecting a model that best predicts item difficulties, the relevant detail is whether the subsets include the same or different items.
+Let $y^\mathrm{t}$ be the training subset.
+A validation subset may include the same items as $y^\mathrm{t}$, and such a validation subset will be denoted $y^\mathrm{s}$.
+Alternatively, a validation subset might include a new set of items, and that training subset will be denoted $y^\mathrm{n}$.
+A model is selected based on
+	$\mathrm{dev}(y^\mathrm{n} | \hat \omega_m(y^\mathrm{t}))$ or
+	$\mathrm{dev}(y^\mathrm{s} | \hat \omega_m(y^\mathrm{t}))$,
+	depending on the form of the validation subset.
+Let $m^*$ represent the model selected from this process.
+The deviance for it in the evaluation subset, $y^\mathrm{e}$, is
+	$\mathrm{dev}(y^\mathrm{e} | \hat \omega_{m^*}(y^\mathrm{t}))$,
+  where $m^*$ may differ depending on which type of validation subset was used.
+In this chapter, the evaluation subset always contains new items; that is, items that are different from those featured in the training and validation subsets.
+
+Other elements of the data may differ or persist between the data subsets. For example, the subsets may include the same or different persons. If the number of persons is small, there may be some advantage in having the same persons in each subset, but in general this is unlikely to be an important factor for the purpose of selecting a model for item prediction. In the simulations that follow, all subsets have different groups of persons. Another element of the data that may or may not persist is $X$; the items may or may not have the same covariate values between subsets. In other words, the items may or may not follow exactly the same design. For simplicity, the simulations assume the same $X$ in all subsets, but this need not be the case in general.
+
+The estimated prediction error (deviance) in holdout validation is conditional on the particular training data used. This is clear in the notation
+	$\mathrm{dev}(y^\mathrm{e} | \hat \omega_{m^*}(y^\mathrm{t}))$,
+in which the deviance of the chosen model in the evaluation subset is conditional on parameter estimates obtained from the training subset.
+This fact distinguishes holdout validation from the cross-validation methods discussed in the next section.
+
+In summary, two approaches to holdout validation for item prediction are considered in this chapter: one in which the validation subset features the same items as the training subset and one in which the validation subset features new items. Either one may be used with the LLTM and the LLTM-E2S, though differences in how the likelihood is constructed for those methods may affect the sensitivity of the score function. As the likelihood for the LLTM-E2S is marginal over items, it is expected to perform well in model selection when paired with holdout validation with new items. (The same should be true for the LLTM-E, if the marginal likelihood for it could be evaluated.) I expect the LLTM with holdout validation with new items to perform less well, as the likelihood for it does not generalize over items. Further, I expect holdout validation with the same items to perform poorly in all cases.
+
+
+\subsection{Cross-validation and AIC}
+
+If the available data are not abundant enough to support holdout validation, single dataset methods for model selection may be considered instead. 
+In $k$-fold cross-validation, the data are split into $K$ (approximately) equally sized partitions, most often $K=5$ or 10.
+A model is fit to all data \emph{not} in fold $k$, and then the fitted model is evaluated using the score function on the data in fold $k$.
+This process is performed for every fold, and the resulting deviances are summed over the folds. 
+When the observations are clustered, cross-validation may or may not keep the clusters intact, depending on the whether the desired inference requires new clusters.
+For item response data, in which item and person clusters are crossed, either the person clusters or the item clusters may be kept intact.
+When the goal is to compare models that explain the difficulty of items, folds should be constructed keeping the items clusters intact while breaking up the person clusters.
+On the other hand, if the purpose is to compare models with different sets of person covariates, folds should instead keep the person clusters intact.
+
+% For item response data, the data may be partitioned into folds defined by persons or by items.
+% To compare models that explain the difficulty of items, it is necessary to construct folds based on items.
+% On the other hand, comparing models with different sets of person covariates \parencite[see for example][]{Adams1997b} would require folds based on persons.
+
+For models for item prediction, a possibility is to assign each item to its own fold, which may be referred to as leave-one-cluster-out cross-validation (LOCO-CV). Then
+\begin{equation}
+	\mathrm{LOCO\textnormal{-}CV}_m = 
+	\sum_{i=1}^I \mathrm{dev}(y_i | \hat \omega_m( y_{-i}))
+\end{equation}
+where $y_i$ indicates all data for item $i$, and $y_{-i}$ indicates all data not associated with item $i$. 
+The LLTM-E2S is particularly suited to performing LOCO-CV, given that the first stage (fitting the Rasch model) need only be carried out once. 
+Then the second stage is performed $I$ times per candidate model, leaving one item out and then obtaining a prediction for the left out item difficulty.
+These predictions are substituted for $x_i'\hat\beta$ in Equation~\ref{eq:2-lltme2s-deviance} to obtain $\mathrm{LOCO\textnormal{-}CV}_m$.
+LOCO-CV could be performed for the LLTM, but it is time-consuming when compared to the LOCO-CV with the LLTM-E2S. For this reason, the simulations that follow only use the LLTM-E2S when performing LOCO-CV.
+
+The Akaike Information Criterion \parencite[AIC;][]{akaike1974new} requires only a single fit of the model and has the form
+\begin{equation} \label{eq:aic}
+	\mathrm{AIC}_m = \mathrm{dev}(y | \hat \omega_m(y)) + 2p_m
+,\end{equation}
+where $p_m$ is the count of parameters in model $m$.
+AIC is an approximation related to the Kullback-Leibler distance, which is a measure of the information lost when a model is used to approximate the true data generating distribution. Calculating the Kullback-Leibler distance would require knowing the true data generating distribution, but approximating the expected \emph{relative} distance
+\begin{equation}
+	\mathrm{ERD}_m = 
+	\mathrm{E}_{y^\mathrm{v}} \mathrm{E}_{y^\mathrm{t}} 
+	  [L(y^\mathrm{v} |\hat \omega_m(y^\mathrm{t}))]
+\end{equation}
+% check into whether should be y^\mathrm{e} or y^{(v)}
+is tractable.
+In the above equation, $y^\mathrm{v}$ and $y^\mathrm{t}$ are (hypothetical) independent datasets and the expectations are taken over the true data generating distribution. The difference between the Kullback-Leibler distance and expected relative distance is an unknown constant that is a function only of the true data generating distribution. This constant will be the same for all competing models, given that it does not depend on the models.
+AIC is an approximation to the expected relative distance multiplied by negative two. For models without random effects, AIC is asymptotically equivalent to  ``leave-one-observation-out'' cross-validation \parencite{stone1977asymptotic}, and for models with random effects it is asymptotically equivalent to LOCO-CV \parencite{fang2011asymptotic}, at least for linear mixed effects models.
+
+\textcite{Kuha2004} describes two requirements for AIC to be a good estimate of the expected relative distance. First, the sample size is assumed to be large. Corrections for small samples exist but must be derived for every model type. Second, the candidate models are assumed to be true. This is a result of the derivation of AIC; the AIC penalty (two times the number of parameters) is a property of the true distribution. For untrue models, the penalty is biased but has zero variance. ``Other, less biased, estimates for the same quantity exist, but their variances must also be larger. Thus, the constant estimate used in [AIC], besides being trivial to calculate, is likely to have a lower mean squared error than alternatives in many models in which its assumptions are at least roughly satisfied'' \parencite[][p. 208]{Kuha2004}.
+
+\textcite{Vaida2005} demonstrate that, for linear mixed effects models, ``marginal'' AIC (as in Equation~\ref{eq:aic}) assumes that (hypothetical) new datasets would entail a different set of clusters than the original data. Also in the context of linear mixed effects models, \textcite{Greven2010} show that marginal AIC is not asymptotically unbiased, favoring models with fewer random effects, but suggest this may not be a problem in choosing between models that merely have differing fixed effects. In addition, \textcite{Vaida2005} develop a conditional AIC for inferences pertaining to new datasets that would have the same, fixed set of clusters, and this work has been extended by others \parencite{Liang2008, Greven2010, yu2012conditional, yu2013information, saefken2014unifying}, though this conditional AIC is not suitable for this application.
+
+The appropriateness of AIC for both the LLTM and LLTM-E2S is unclear. The likelihood for the LLTM is in general badly misspecified due to the omission of the item residuals, and so the assumption that the candidate model be close to the true model will not be met. Meanwhile, the likelihood for the LLTM-E2S results from a constructed dataset and an unusual regression model in which part of the error variance is treated as known, and the accuracy of AIC in such a case is unknown. Further, the usual form of AIC given above will apply the same penalty for either approach, as both have the same number of parameters, even though the magnitude of the deviances differ dramatically between the two due to the LLTM-E2S likelihood arising from the constructed dataset.
+
+Some predictions may be made from these facts. LOCO-CV with the LLTM-E2S is expected to perform well in selecting the most predictive model because (1) it is aligned with the selection problem, (2) no information relevant to item difficulties is lost in the transition to a constructed dataset, and (3) in general the number of persons will be large, resulting in small standard errors for $\hat \delta_i$. When the data are informative, when $\tau$ is small and the number of person large, LOCO-CV with the LLTM-E2S should also tend to select the generating model, if available. It is expected that AIC will perform similarly to LOCO-CV for the LLTM-E2S, particularly when the number of items is large, and if so the use of AIC in this context would be supported. Also, the performance of AIC with the LLTM-E2S should resemble holdout validation with new items, while AIC with the LLTM should resemble holdout validation with the same items. Further, AIC with the LLTM is expected to perform poorly, partly because the likelihood is misspecified and partly because the likelihood is not marginal over items.
+
+
+\subsection{BIC and likelihood ratio testing}
+
+For completeness, two other model selection strategies are considered despite the fact that they are not motivated by prediction. First, the Bayesian Information Criterion \parencite[BIC;][]{schwarz1978estimating} is
+\begin{equation}
+	\mathrm{BIC}_m = \mathrm{dev}(y | \hat \omega_m(y)) + p_m \log N
+,\end{equation}
+where $N$ is the count of observations. For the LLTM approach $N = I \times P$, while for the two stage approach $N = I$. The penalty for BIC is based on an approximation to the Bayes factor for an assumed multivariate normal prior distribution with means equal to the parameter estimates and a covariance matrix that is as informative as one observation \parencite[][p. 196]{Kuha2004}. The model with the lowest $\mathrm{BIC}_m$ is preferred.
+
+Second, the likelihood ratio test is based on hypothesis testing and is suitable only for comparing nested models. Let $\Delta_\mathrm{dev}$ be the difference in deviance between two models, and let $\Delta_p$ be the difference in the number of parameters. Then the likelihood ratio test is a significance test for the statistic 
+$\chi^2(\Delta_p) = \Delta_\mathrm{dev}$,
+and most often a p-value less than .05 is deemed statistically significant. If the likelihood ratio test provides a statistically significant result, the simpler model is rejected in favor of the more complex. When multiple comparisons are needed, the comparisons may be made in ordered pairs. For example, the simplest model may be compared against the second simplest, and if the likelihood ratio test rejects the simplest model, then the second simplest is then compared against the third simplest, and so on. As such, the researcher selects the simplest unrejected model in the end.
+
+
+\section{Simulation}
+
+
+\subsection{Simulation study design}
+
+In each replication of this simulation, the LLTM-E is used to generate the training data subset, $y^\mathrm{t}$, the validation subsets, $y^\mathrm{s}$ and $y^\mathrm{n}$, and an evaluation subset, $y^\mathrm{e}$. The two forms of holdout validation (same items versus different items) are performed for competing models using both the LLTM and LLTM-E2S. In this way the simulation is a $2 \times 2$ (holdout validation type by method) design.
+The simulation replications track which model is selected and score function values,
+	$\mathrm{dev}(y^\mathrm{e} | \hat \omega_{m}(y^\mathrm{t}))$,
+for both types of holdout validation and for all models.
+In addition, model selection is also preformed using AIC, BIC, LOCO-CV, and likelihood ratio tests using $y^\mathrm{t}$.
+
+The fixed part of the data generating model for the item difficulties is
+\begin{equation}
+	x_i'\beta \equiv \beta_1 x_{1i} + \beta_2 x_{2i} + \beta_3 x_{3i} + \beta_4 x_{4i} +
+		\beta_5 x_{2i} x_{3i}
+,\end{equation}
+which includes an intercept ($x_{1i} = 1$), a continuous covariate ($x_{2i}$), two indicator variables ($x_{3i}$ and $x_{4i}$), and an interaction ($x_{2i} x_{3i}$). The coefficients are
+$\beta = \{-.5, 1, .5, .5, -.5\}$. Three competing models are subjected to the various model selection schemes. Model~1 omits the interaction:
+\begin{equation}
+	x_i'\beta \equiv \beta_1 x_{1i} + \beta_2 x_{2i} + \beta_3 x_{3i} + \beta_4 x_{4i}
+.\end{equation}
+Model~2 matches the data generating model.
+Model~3 includes an extra, unwarranted interaction:
+\begin{equation}
+	x_i'\beta \equiv \beta_1 x_{1i} + \beta_2 x_{2i} + \beta_3 x_{3i} + \beta_4 x_{4i} +
+		\beta_5 x_{2i} x_{3i} + \beta_6 x_{2i} x_{4i}
+.\end{equation}
+Using the two stage method with Model~2 matches the data generating model, while using the LLTM with Model~2 only approximates it because the LLTM does not include item residuals.
+
+Two factors are varied across simulation conditions: the standard deviation of the item residuals $\tau$ and the number of items $I$. In one set of conditions,
+$\tau \in \{.2, .5, 1\}$ while $I$ is fixed at 32,
+and in another set
+$I \in \{16, 32, 64\}$ while $\tau$ is fixed at .5.
+Due to overlap, the design has a total of five conditions. Table~\ref{tab:2-X} provides the item covariate matrix when $I=32$. When $I \ne 32$, $x_{2i}$ takes a different set of values with the same range and the fully crossed design of $x_{2i}$, $x_{3i}$, and $x_{4i}$ is maintained. Due to the design, the item covariates are uncorrelated. In all simulation conditions, the multiple datasets are generated with 500 persons and with ability standard deviation $\sigma = 1$.
+
+\begin{table}
+	\centering
+<<covariates_table, results = tex>>=
+ex <- read.dta13("example.dta")
+X <- subset(ex, person == 1, c(paste0("x", 2:4)))
+X <- cbind(x1 = 1, X)
+colnames(X) <- paste0("$x_", 1:4, "$")
+rownames(X) <- paste("Item", 1:nrow(X))
+xtab <- xtable(X, align = "lrrrr", digits = c(0, 0, 2, 0, 0))
+print(xtab, floating = FALSE, sanitize.colnames.function = function(x) x)
+@
+\caption{Item covariate matrix ($X$) for simulated datasets with $I = 32$ items. When $I \ne 32$, $x_2$ is a modified set of similarly blocked equidistant numbers between zero and one.}
+\label{tab:2-X}
+\end{table}
+
+<<upsilon>>=
+# Get variance of fixed part of items
+xB <- ex[ex$person == 1, "xB"]
+# Using population variance:
+upsilon_sq <- (length(xB)-1) / length(xB) * var(xB)
+@
+
+A key feature of the generated datasets (and data of this type more generally) is the
+extent to which the item covariates account for the item difficulties. Let
+$\upsilon^2 = \mathrm{var}(X\beta)$
+represent the variance of the structural part of item difficulty. Because of the item design, $\upsilon^2 = \Sexpr{f(upsilon_sq, 2)}$ for all simulated datasets, even if they have different numbers of items. The total item variance is
+$\upsilon^2 + \tau^2$. Then
+\begin{equation}
+	R^2 = \frac{\upsilon^2}{\upsilon^2 + \tau^2}
+\end{equation}
+represents the proportion of item variance accounted for by the item predictors. Figure~\ref{fig:2-rsq-vs-tau} displays $R^2$ as a function of $\tau$ with $\upsilon^2$ fixed to this value. The points marked indicate the generating values of $\tau$ and correspond approximately to conditions in which 90\%, 60\%, and 30\% of item variance is accounted for.
+
+\begin{figure}[tb]
+\begin{center}
+<<rsq_plot, fig = TRUE>>=
+r_sq <- function(tau, upsilon_sq) upsilon_sq / (tau^2 + upsilon_sq)
+tau <- sort(unique(df_bias$tau))
+pts <- data.frame(tau = tau, r_sq = r_sq(tau, upsilon_sq))
+
+xlim <- c(0, 1.5)
+ggplot() +
+  scale_x_continuous(limits = xlim) +
+  scale_y_continuous(limits = c(0, 1)) +
+  geom_point(data = data.frame(pts),
+             mapping = aes(x = tau, y = r_sq),
+             size = 2) +
+  stat_function(data = data.frame(x = xlim),
+                mapping = aes(x),
+                fun = r_sq,
+                args = list(upsilon_sq = upsilon_sq)) +
+  xlab(expression(paste("Residual item SD (", tau, ")"))) +
+  ylab(expression(paste("Explained variance (", R^2, ")"))) +
+  my_theme
+@
+\end{center}
+\caption{Proportion of explained item variance ($R^2$) plotted against the residual item standard deviation ($\tau$). The dots represent chosen values for $\tau$ in the simulations, which correspond approximately to $R^2 = .9$, .6, and .3.}
+\label{fig:2-rsq-vs-tau}
+\end{figure}
+
+
+\subsection{Parameter recovery and standard error estimates}
+
+Parameter recovery is investigated for both the LLTM and LLTM-E2S. Results for the LLTM-E2S are of interest as confirmation that the method works, while results for the LLTM are of interest because the misspecification of the LLTM may lead to biased parameter estimates.
+This bias is assessed by the difference between the estimated and generating parameters across simulation replications.
+For this purpose, I focus on Model~2 because it matches the correct model, and I use estimation results $\hat \omega(y^\mathrm{t})$.
+The results are based on 500 replications per condition.
+Figure~\ref{fig:2-bias} presents estimates of bias (the mean difference) with 95\% confidence intervals ($\pm 1.96 \frac{\mathrm{sd}}{\sqrt{500}}$) separately for the LLTM and LLTM-E2S.
+
+For the LLTM, there is evidence of attenuation in $\hat \beta$ in most of the simulation conditions, though with the exception of the $\tau=1$ condition, the effect is small.
+(The generating values of $\beta_1$ and $\beta_5$ are negative and overestimated, while the generating values for the others are positive and underestimated.)
+With the absence of item residuals, the LLTM is like a population-average model in regards to the items, which is known to exhibit attenuated coefficients for the logistic case \parencite{ritz2004equivalence}.
+The estimate of the person standard deviation, $\hat \sigma$, also exhibits a downward bias that depends on $\tau$.
+For the LLTM-E2S, there is no systematic evidence for bias in $\hat \beta$, though there is a downward bias in $\hat \tau$ that is mitigated with smaller generating values of $\tau$ and larger numbers of items. 
+The bias in $\hat \tau$ may be alleviated by using restricted maximum likelihood estimation or more recent estimators \parencite[see for example,][]{viechtbauer2005bias}, but for simplicity and speed maximum likelihood estimation is used in the simulation.
+
+\begin{figure}[tb]
+\begin{center}
+<<bias_plot, fig = TRUE, height = 6>>=
+bias_1 <- ggplot(subset(df_bias, nitems == 32 & model == 2)) +
+  aes(x = as.factor(tau), y = mean, ymin = lower, ymax = upper,
+      color = factor(par)) +
+  geom_linerange(position = position_dodge(width = 0.5)) +
+  geom_point(size = 2, position = position_dodge(width = 0.5)) +
+  facet_grid(. ~ Method) +
+  labs(list(x = expression(paste("Residual item SD (", tau, ")")),
+            y = "Bias", color = NULL)) +
+  scale_colour_manual(values = par_colors, labels = par_labels) +
+  my_theme +
+  theme(panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank())
+
+bias_2 <- ggplot(subset(df_bias, tau == .5 & model == 2)) +
+  aes(x = as.factor(nitems), y = mean, ymin = lower, ymax = upper,
+      color = factor(par)) +
+  geom_linerange(position = position_dodge(width = 0.5)) +
+  geom_point(size = 2, position = position_dodge(width = 0.5)) +
+  facet_grid(. ~ Method) +
+  labs(list(x = expression(paste("Number of items (", italic(I), ")")),
+            y = "Bias", color = NULL)) +
+  scale_colour_manual(values = par_colors, labels = par_labels) +
+  my_theme +
+  theme(panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank())
+
+
+grid.arrange(bias_1, bias_2, ncol = 1)
+@
+\end{center}
+\caption{Mean bias (parameter estimates minus generating values) with 95\% confidence intervals for Model~2. Results are for 500 simulation replications per condition. At the top are results for conditions in which the residual item standard deviation ($\tau$) is varied while the number of items is held at 32, and at the bottom are conditions in which the number of items is varied while $\tau$ is held at .5. The LLTM does not include estimation of $\tau$, and the LLTM-E2S does not include estimation of $\sigma$ in the second stage.}
+\label{fig:2-bias}
+\end{figure}
+
+The LLTM and LLTM-E2S provide very different standard error estimates. 
+To illustrate, I focus on $\beta_6$ for Model~3. Because $\beta_6 = 0$ in data generation,
+  $\frac{\hat \beta_6}{\mathrm{se}(\hat \beta_6)}$
+  should asymptotically follow a standard normal distribution across simulation     iterations if the standard error estimates are correct.
+Figure~\ref{fig:2-qqplot} presents Q-Q plots of the observed
+  $\frac{\hat \beta_6}{\mathrm{se}(\hat \beta_6)}$
+  against the quantiles of the standard normal distribution. In all conditions,
+  $\frac{\hat \beta_6}{\mathrm{se}(\hat \beta_6)}$
+  for the LLTM deviate greatly from the expected results from a standard normal distribution and indicate that the estimated standard errors are too small.
+The LLTM-E2S fairs much better, excepting the condition with only $I=16$ items which shows somewhat longer than expected tails.
+
+Clearly the LLTM yields inappropriately small standard errors, which is a result of the omission of item residuals. 
+As mentioned earlier, \textcite[][p. 232]{Fischer1997} recommended conducting a likelihood ratio test comparing the LLTM and Rasch model as a goodness of fit test.
+Failure to reject the LLTM would imply that $\tau$ is about zero, and then it may be that the LLTM would yield approximately correct standard errors.
+However, this is an improbable scenario as it requires perfect predictors for item difficulty.
+% In every replication of this simulation, though, the likelihood ratio test rejected Model~2 when compared to the Rasch model, which includes replications in which the item covariates account for about 90\% of item variance.
+
+\begin{figure}[tb]
+\begin{center}
+<<qq_plot, fig = TRUE, height = 6>>=
+qq_1 <- ggplot(subset(df_recov, par == "beta6" & nitems == 32)) +
+  aes(sample = z) +
+  geom_point(stat = "qq", size = .5) +
+  geom_abline(slope = 1, intercept = 0) +
+  xlab("Normal theoretical quantiles") + ylab("Observed quantiles") +
+  facet_grid(tau + nitems ~ Method, labeller =
+             label_bquote(rows = list(tau == .(tau), italic(I) == .(nitems)) )) +
+  my_theme
+
+qq_2 <- ggplot(subset(df_recov, par == "beta6" & tau == .5)) +
+  aes(sample = z) +
+  geom_point(stat = "qq", size = .5) +
+  geom_abline(slope = 1, intercept = 0) +
+  xlab("Normal theoretical quantiles") + ylab("") +
+  facet_grid(tau + nitems ~ Method, labeller =
+             label_bquote(rows = list(tau == .(tau), italic(I) == .(nitems)) )) +
+  my_theme
+
+grid.arrange(qq_1, qq_2, nrow = 1)
+@
+\end{center}
+\caption{Q-Q plots for the observed $\frac{\hat \beta_6}{\mathrm{se}(\hat \beta_6)}$ for Model~3 across simulation iterations versus standard normal quantiles. On the left are results for simulation replications in which the residual item standard deviation ($\tau$) varies with the number of items held at 32, and on the right are results for replications in which the number of items vary with $\tau$ held at .5. Results are shown separately for the LLTM and LLTM-E2S. Because $\beta_6 = 0$ in data generation, $\frac{\hat \beta_6}{\mathrm{se}(\hat \beta_6)}$ should follow a standard normal distribution across simulation iterations if the standard errors are correct. The lines have an intercept of zero and slope of one, indicating where the points should lay if $\frac{\hat \beta_6}{\mathrm{se}(\hat \beta_6)}$ follows a standard normal distribution.}
+\label{fig:2-qqplot}
+\end{figure}
+
+
+\subsection{Model selection}
+
+In describing model selection results, it is useful to consider the relative amount of information about the regression coefficients contained in the simulated datasets.
+When $\tau$ is low the item covariates are strong predictors, so $\tau = .2$ is a ``high information'' condition. 
+Also, when the number of items is large, more precise estimates of $\beta$ are possible, so $I = 64$ is also a high information condition.
+Conversely, $\tau = 1$ and $I = 16$ are ``low information'' conditions.
+It is expected that Model~2 should provide the best predictions given that it matches the generating model, though there is no guarentee of this with specific, finite datasets.
+In high information conditions, it is expected that Model~2 will tend to be selected using holdout validation, LOCO-CV, or AIC because enough information should be available to obtain good parameter estimates.
+In low information conditions, the simpler Model~1 may be selected more often, as estimates for its fewer parameters may be more stable compared to those in larger models.
+This is a matter of bias-variance trade off \parencite[][p. 223]{Hastie2009}, and the expected difference in selection between high and low information conditions is correct behavior as the goal is to identify the most predictive model rather than a true model. 
+Lastly, there is no condition in which Model~3, the most complex model, should tend to be favored, though random variation in the generated datasets are expected to lead to it being selected some small number of times.
+
+% Selecting true model is not really the criteria.
+% It is important to note that judging the selection strategies simply by how often they select the a ``true'' model is somewhat inappropriate for holdout validation, cross-validation, and AIC. The reason is that these methods are designed to select the model that best predicts new data, and the true model is only guaranteed to be the best predictor asymptotically (as sample size approaches infinity). An overly simple model may often yield better predictions in finite data, especially when some aspects of the true model are poorly estimated. This is a result of the the bias-variance trade off \parencite[][p. 223]{Hastie2009}. On the other hand, selecting an overly complex model should be a chance occurrence. For these reasons, the selection results do not (directly) indicate which approaches yield the best predictions.
+
+% HV is similar for LLTM and LLTM-E2S. HV with new items is better than HV with same items. Performance of HV.
+Figure~\ref{fig:2-selection-tau} provides the model selection results for the simulation conditions in which $\tau$ is varied, and Figure~\ref{fig:2-selection-nitems} shows the same for conditions in which the number of items is varied. Holdout validation using new items performs similarly between the LLTM (left side of both figures) and the LLTM-E2S (right side). In addition, this method selects Model~2 the majority of times in high information conditions, but Model~1 is selected with increasing frequency as the amount of information decreases ($\tau$ increases or $I$ decreases). Holdout validation using the same items also behaves similarly between the LLTM and LLTM-E2S, but for this approach Model~3 is chosen the majority of times in all simulation conditions. This result is problematic but not surprising; idiosyncrasies that arise from a particular set of item residuals in the training subset are repeated again in the validation subset, and so the two subsets are very similar. In this way the overly complex Model~3 is provided an opportunity to capitalize on chance. Clearly, holdout validation for item prediction must feature datasets with differing sets of items in order to be effective.
+
+\begin{figure}[tb]
+\begin{center}
+<<select_tau_plot, fig = TRUE, height = 7>>=
+ggplot(subset(percents_df, percents_df$nitems == 32)) +
+  aes(as.factor(tau), selected, fill = factor(model)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  theme(panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank()) +
+  labs(list(x = expression(paste("Residual item SD (", tau, ")")),
+            y = "Percentage of times selected", fill = "Model")) +
+  facet_grid(Selector ~ Method) +
+  my_theme +
+  theme(panel.grid.minor.x = element_blank(),
+        panel.grid.major.x = element_blank())
+@
+\end{center}
+\caption{Percentages of times each model was chosen by the various selection criteria for simulation replications in which the residual item standard deviation ($\tau$) is varied while the number of items is held at 32. Results are shown separately for the LLTM and LLTM-E2S. The criteria include the likelihood ratio test (``LR test''), AIC, BIC, holdout validation using the same set of items (``HV same items''), holdout validation with a new set of items (``HV new items''), and leave-one-cluster-out cross-validation (``LOCO-CV''). The last criterion was applied only to the LLTM-E2S and involves leaving one item out at a time.}
+\label{fig:2-selection-tau}
+\end{figure}
+
+\begin{figure}[tb]
+\begin{center}
+<<select_nitems_plot, fig = TRUE, height = 7>>=
+ggplot(subset(percents_df, percents_df$tau == .5)) +
+  aes(factor(nitems), selected, fill = factor(model)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  theme(panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank()) +
+  labs(list(x = expression(paste("Number of items (", italic(I), ")")),
+            y = "Percentage of times selected", fill = "Model")) +
+  facet_grid(Selector ~ Method) +
+  my_theme +
+  theme(panel.grid.minor.x = element_blank(),
+        panel.grid.major.x = element_blank())
+@
+\end{center}
+\caption{Percentages of times each model was chosen by the various selection criteria for simulation replications in which the number of items is varied while the residual item standard deviation ($\tau$) is held at .5. Results are shown separately for the LLTM and LLTM-E2S. The criteria include the likelihood ratio test (``LR test''), AIC, BIC, holdout validation using the same set of items (``HV same items''), holdout validation with a new set of items (``HV new items''), and leave-one-cluster-out cross-validation (``LOCO-CV''). The last criterion was applied only to the LLTM-E2S and involves leaving one item out at a time.}
+\label{fig:2-selection-nitems}
+\end{figure}
+
+% For LLTM, AIC corresponds to HV with same items. Also, LR and BIC.
+Focusing now on the LLTM, AIC performs similarly to holdout validation with the same items in terms of model selection (Figures~\ref{fig:2-selection-tau} and \ref{fig:2-selection-nitems} again) and quite differently from holdout validation with new items. This supports the argument that using AIC with the deviance from the LLTM corresponds to an inference involving the same set of items. The likelihood ratio test is more conservative, that is, tends to prefer simpler models, when compared to AIC. Assuming an alpha level of .05, a model would have to have a deviance 3.8 lower than a competing model with one fewer parameter in order to reject the simpler model, compared to a difference in deviance of 2 for AIC. BIC is more conservative still with a penalty of 
+\Sexpr{and(f(log(unique(df_bias$nitems) * 500), 2), "or")}
+per parameter, depending on the number of items. The relative conservatism of the likelihood ratio test and BIC are noticeable in the two figures. However, AIC, BIC, and the likelihood ratio test all bear resemblance to holdout validation with the same items and too frequently select the overly complex Model~3.
+
+% For LLTM-E2S, AIC corresponds to HV with new items. Also, LR and BIC.
+In contrast, AIC paired with the LLTM-E2S performs similarly to holdout validation with new items in terms of model selection (Figures~\ref{fig:2-selection-tau} and \ref{fig:2-selection-nitems} again) and is generally more apt to select Model~2 than holdout validation with new items. 
+Results for LOCO-CV with the LLTM-E2S resembled those for AIC, as expected, though LOCO-CV had a greater tendency to select simpler models. This is at least partly due to LOCO-CV relying on one less observation than AIC when fitting models. In fact, when $I = 16$ (Figure~\ref{fig:2-selection-nitems}) LOCO-CV exhibits strong conservatism relative to AIC, but when $I=64$ the two methods behave quite similarly.
+As before, the likelihood ratio test and BIC are more conservative than AIC for the LLTM-E2S, with the LR test implying a penalty of 3.8 again (assuming the models differ by one parameter) and BIC implying a softer than before penalty of 
+\Sexpr{and(f(log(unique(df_bias$nitems)), 2), "or")}
+depending on the number of items. The relative harshness of the penalties are reflected in the selection results presented in the figures. Unlike for the LLTM, AIC, BIC, and the likelihood ratio test appear more like holdout validation with new items when paired with the LLTM-E2S, and the three perform as expected in model selection.
+
+% Conditional versus expected prediction error.
+% For the LLTM-E2S, holdout validation with new items was less effective than AIC or LOCO-CV for selecting the generating model, but these selection strategies differ in an important regard; holdout validation selects a model based on the conditional test error while AIC and LOCO-CV select a model based on the expected test error. Holdout validation indicates the prediction error of a particular fitted model in a new dataset.
+% AIC and LOCO-CV, on the other hand, estimate how well a model will predict new data in expectation, over possible training datasets. In this way, AIC and LOCO-CV do not directly inform on the prediction error of fitted models given a set of parameter estimates. For these reasons, holdout validation may be preferred when the purpose is prediction per se, while AIC and LOCO-CV may be preferred for selecting a preferred model for explanation.
+
+
+\subsection{Comparison of predictive performance in evaluation data}
+
+In holdout validation, a model $m$ is evaluated by the holdout deviance,
+$\mathrm{dev}(y^\mathrm{e} | \hat \omega_{m^*}(y^\mathrm{t}))$,
+which is the deviance of the trained model when applied to the evaluation subset. For the purpose of comparing simulation results, it is useful to instead consider what I will call the relative holdout deviance,
+\begin{equation}
+	\mathrm{RHD}_m = 
+	\mathrm{dev}(y^\mathrm{e} | \hat \omega_{m}(y^\mathrm{t})) -
+  \frac{1}{M} \sum_{q=1}^M
+  \mathrm{dev}(y^\mathrm{e} | \hat \omega_{q}(y^\mathrm{t}))
+\end{equation}
+which is the holdout deviance for model $m$ minus the average holdout deviance for all $M$ models under consideration. The deviance for the same model across simulation replications is highly variable, and the RHD stabilizes this variation while maintaining the relative differences in deviance between competing models.
+
+The $\mathrm{RHD}_m$ is a useful means of comparing the predictive performance of the candidate models. Figure~\ref{fig:2-relative} presents the mean $\mathrm{RHD}_m$ for each model across simulation conditions for the LLTM and LLTM-E. The figure shows that Model~2, the data generating model, tends to provide the best predictions for new items except in low information conditions, in which case the simpler Model~1 performs better on average. (The LLTM with $I=16$ items deviates from this trend, however.) As mentioned earlier, the generating model does not always make the best predictions, particularly with limited data, and Figure~\ref{fig:2-relative} shows that some of the simulation conditions produce this phenomenon.
+
+To assess the differences in prediction accuracy between different selection criteria, let $\mathrm{RHD}_{m^*}$ represent the relative holdout deviance for the model chosen by a given selection criterion. In any given simulation replication, the various selection strategies may select a different preferred model $m^*$. Differences in the mean $\mathrm{RHD}_{m^*}$ across replications between the selection strategies are a function of $m^*$ only, given that $\omega_{m}(y^\mathrm{t})$ does not depend on the selection strategy. As an aside, a researcher would not ordinarily have an evaluation subset when employing single-dataset methods like cross-validation or information criteria, but the simulation study makes possible the consideration of what the predictive accuracy would be in an evaluation subset. 
+
+In this way the predictive utility of the various selection strategies may be compared, as depicted in Figure~\ref{fig:2-prediction}. Holdout validation with new items outperformed all other selection strategies in every simulation condition on the basis of $\mathrm{RHD}_{m^*}$. This result may seem surprising given that holdout validation with new items did not in general select Model~2 more often (recall Figures~\ref{fig:2-selection-tau} and \ref{fig:2-selection-nitems}) than the other selection strategies. 
+As mentioned earlier, holdout validation is conditional on the fitted model with estimated parameters $\omega_{m}(y^\mathrm{t})$, whereas AIC and cross-validation are not. This is related to the difference between what \textcite[][Chapter~7]{Hastie2009} referred to as conditional and expected error. In short, AIC and cross-validation estimate the expected error, and so are apt to select the model that makes the best predictions in expectation. In contrast, holdout validation estimates the conditional error, and so is apt to select the most predictive of the \emph{fitted} models, which are conditional on the training data.
+
+% 
+% In this way the predictive utility of different selection criteria may be evaluated by the values they obtain for $\mathrm{RHD}_m^*$. Though a researcher would not ordinarily have an evaluation subset when employing single-dataset methods like cross-validation or information criteria, the simulation study does have an evaluation subset that may be used to calculated $\mathrm{RHD}_m^*$ even for these selection approaches. Figure~\ref{fig:2-prediction} presents this result for the simulation. Across the board, holdout validation with new items performs better than the other methods, though results are sometimes close with the LLTM.
+% 
+% I focus on the results for the LLTM-E2S. It should not be surprising that predictions from holdout validation with new items outperforms those from holdout validation with the same items. However, holdout validation with new items also provided better predictions than AIC and LOCO-CV in all simulation conditions, even though these were found to select the true model more often for some conditions (as in Figures~\ref{fig:2-selection-tau} and \ref{fig:2-selection-nitems}). All three of these selection methods should reliably select the most predictive model (not necessarily the true model) as sample size becomes large. In the bottom right panel of Figure~\ref{fig:2-prediction}, it may be seen that both AIC and LOCO-CV approach the performance of holdout validation with new items as the number of items increases.
+
+\begin{figure}[tb]
+\begin{center}
+<<relative_plot, fig = TRUE, height = 6>>=
+rel_1 <- ggplot(subset(df_rel, nitems == 32)) +
+  aes(y=relative, x = tau, color = Model, pch = Model) +
+  stat_summary_bin(geom="point", fun.y = mean) +
+  stat_summary_bin(geom="line", fun.y = mean)  +
+  facet_wrap(~Method, scales = "free_y") +
+  xlab(expression(paste("Residual item SD (", tau, ")"))) + 
+  ylab("Relative deviance") +
+  scale_x_continuous(breaks = unique(df_rel$tau)) +
+  my_theme +
+  theme(panel.grid.minor = element_blank())
+
+rel_2 <- ggplot(subset(df_rel, tau == .5)) +
+  aes(y=relative, x = nitems, color = Model, pch = Model) +
+  stat_summary_bin(geom="point", fun.y = mean) +
+  stat_summary_bin(geom="line", fun.y = mean)  +
+  facet_wrap(~Method, scales = "free_y")+
+  xlab(expression(paste("Number of items (", italic(I), ")"))) +
+  ylab("Relative deviance") +
+  scale_x_continuous(breaks = unique(df_rel$nitems)) +
+  my_theme +
+  theme(panel.grid.minor = element_blank())
+
+grid.arrange(rel_1, rel_2, ncol = 1)
+@
+\end{center}
+\caption{The mean relative holdout deviance ($\mathrm{RHD}_m$) across simulation replications for each model. The top panel column shows simulation replications in which the residual item standard deviation ($\tau$) varies while the number of items is held at 32, and the bottom panel shows replications in which the number of items varies while $\tau$ is held at .5.}
+\label{fig:2-relative}
+\end{figure}
+
+\begin{figure}[tb]
+\begin{center}
+<<prediction_plot, fig = TRUE, height = 6>>=
+pred_theme <- my_theme +
+    theme(panel.grid.minor = element_blank(),
+        strip.text.x = element_text(size = 9),
+        axis.text.x = element_text(size = 8))
+
+pred_1 <- ggplot(subset(df_predmean, nitems == 32)) +
+  aes(y=relative, x = tau) +
+  geom_point() + geom_line() +
+  facet_grid(Method ~ Selector, scales = "free_y") +
+  xlab(expression(paste("Residual item SD (", tau, ")"))) + 
+  ylab("Mean relative deviance") +
+  scale_x_continuous(breaks = unique(df_predmean$tau)) +
+  pred_theme
+
+
+pred_2 <- ggplot(subset(df_predmean, tau == .5)) +
+  aes(y=relative, x = nitems) +
+  geom_point() + geom_line() +
+  facet_grid(Method ~ Selector, scales = "free_y") +
+  xlab(expression(paste("Number of items (", italic(I), ")"))) +
+  ylab("Mean relative deviance") +
+  scale_x_continuous(breaks = unique(df_predmean$nitems)) +
+  pred_theme
+
+grid.arrange(pred_1, pred_2, ncol = 1)
+@
+\end{center}
+\caption{The mean relative holdout deviance ($\mathrm{RHD}_m$) across simulation replications for the selected model by selection criterion. The top panel column shows simulation replications in which the residual item standard deviation ($\tau$) varies while the number of items is held at 32, and the bottom panel shows replications in which the number of items vary while $\tau$ is held at .5. LOCO-CV was not performed for the LLTM.}
+\label{fig:2-prediction}
+\end{figure}
+
+
+\subsection{Implied penalties associated with holdout validation}
+
+AIC features a penalty to the insample deviance that is a function of the number of model parameters. Let this be $d_\mathrm{AIC} = 2p$. In this context, $d_\mathrm{AIC}$ is an estimate of
+\begin{equation}
+	d_{\mathrm{HV}} = \mathrm{E}_{y^\mathrm{e}} \mathrm{E}_{y^\mathrm{t}}
+	\left [
+		\mathrm{dev} 
+		  \left (y^\mathrm{e} | \hat \omega_m(y^\mathrm{t}) \right ) -
+		\mathrm{dev}
+		  \left (y^\mathrm{e} | \hat \omega_m(y^\mathrm{e}) \right )
+	\right ]
+,\end{equation}
+which is the expected difference between the holdout validation deviance and the insample deviance. Then $\hat d_{\mathrm{HV}}$, an empirically determined estimate for the appropriate penalty, may be obtained from the simulation as
+\begin{equation}
+	\hat d_{\mathrm{HV}} = \frac{1}{R} \sum_{r=1}^{R}
+	\left [
+		\mathrm{dev} 
+		  \left (y^{\mathrm{e},r} | \hat \omega_m(y^{\mathrm{t},r}) \right ) -
+		\mathrm{dev} 
+		  \left (y^{\mathrm{e},r} | \hat \omega_m(y^{\mathrm{e},r}) \right )
+	\right ]
+,\end{equation}
+where $r$ indexes the $R$ simulation replications. In a large sample, $d_\mathrm{AIC}$ should be approximate $d_{\mathrm{HV}}$ well. Further, the penalty implied by LOCO-CV mat be estimated as
+\begin{equation}
+	\hat d_{\mathrm{CV}} = 
+	\frac{1}{R} \sum_{r=1}^{R}  \left [
+  	\left [ \sum_{i=1}^I 
+  		\mathrm{dev} \left (
+  		  y_i^{\mathrm{t},r} | \hat \omega_m(y_{-i}^{\mathrm{t},r}) \right )
+  	  \right ] -
+  	\mathrm{dev} \left (
+  	  y^{\mathrm{t},r} | \hat \omega_m(y^{\mathrm{t},r}) 
+  	\right )
+	\right ]
+.\end{equation}
+$\hat d_{\mathrm{CV}}$ should also approximate $d_{\mathrm{HV}}$ well when the sample is large.
+
+Figure~\ref{fig:2-penalty} displays $\hat d_{\mathrm{HV}}$, $d_\mathrm{AIC}$, and $\hat d_{\mathrm{CV}}$ across simulation conditions.
+For the LLTM, the estimated penalties ($\hat d_{\mathrm{HV}}$) are much greater than those associated with AIC ($d_\mathrm{AIC}$) across all simulation conditions, as shown in Figure~\ref{fig:2-penalty}. 
+Clearly the penalty implied by AIC is incorrect for the LLTM. 
+Interestingly, $\hat d_{\mathrm{HV}}$ for the LLTM appears to depend on $\tau$, and if $\tau$ were near zero, it may be that $\hat d_{\mathrm{HV}}$ would approximately equal $d_\mathrm{AIC}$ for the LLTM. 
+For the LLTM-E2S, $d_\mathrm{AIC}$ is also lower than $\hat d_{\mathrm{HV}}$ in all conditions, though the discrepancy is much less. When $I=64$, $d_\mathrm{AIC}$ and $\hat d_{\mathrm{HV}}$ do not differ greatly, and so it may be that with a very large number of items the AIC approximation would be accurate. $\hat d_{\mathrm{CV}}$ is quite close to $\hat d_{\mathrm{HV}}$ except when $I=16$ and (surprisingly) when $\tau=.2$
+
+
+\begin{figure}[tb]
+\begin{center}
+<<penalty_plot, fig = TRUE, height = 8>>=
+p_est_1 <- ggplot(subset(df_penstack, nitems == 32)) +
+  aes(y = mean, x = tau, color = Model, pch = Model) +
+  geom_line() + geom_point() +
+  facet_grid(method~Type, scales = "free_y") +
+  # guides(color = guide_legend(reverse=TRUE), pch = guide_legend(reverse=TRUE)) +
+  xlab(expression(paste("Residual item SD (", tau, ")"))) + 
+  ylab("Estimated penalty") +
+  scale_x_continuous(breaks = unique(df_penstack$tau)) +
+  my_theme +
+  theme(panel.grid.minor = element_blank())
+  
+p_est_2 <- ggplot(subset(df_penstack, tau == .5)) +
+  aes(y = mean, x = nitems, color = Model, pch = Model) +
+  geom_line() + geom_point() +
+  facet_grid(method~Type, scales = "free_y") +
+  # guides(color = guide_legend(reverse=TRUE), pch = guide_legend(reverse=TRUE)) +
+  xlab(expression(paste("Number of items (", italic(I), ")"))) +
+  ylab("Estimated penalty") +
+  scale_x_continuous(breaks = unique(df_penstack$nitems)) +
+  my_theme +
+  theme(panel.grid.minor = element_blank())
+
+grid.arrange(p_est_1, p_est_2, ncol = 1)
+@
+\end{center}
+\caption{
+Estimated penalties implied by holdout validation with new items ($\hat d_{\mathrm{HV}}$), AIC $d_\mathrm{AIC}$, and LOCO-CV ($\hat d_{\mathrm{CV}}$) for the LLTM and LLTM-E2S. The top set of plots shows simulation replications in which the residual item standard deviation ($\tau$) varies while the number of items is held at 32, and the bottom set shows replications in which the number of items vary while $\tau$ is held at .5. LOCO-CV was not performed with the LLTM.}
+\label{fig:2-penalty}
+\end{figure}
+
+
+\section{Discussion}
+
+
+
+
+% \begin{itemize}
+% 	\item \emph{Selection conditional on estimated model.} Holdout validation differs from AIC and LOCO-CV in that selection is based on the conditional prediction error rather than the expected prediction error (with the expectation taken over possible training datasets). Holdout validation with new items was more effective in selecting a model for prediction, even though it is not always more apt to choose the true model. However, the true model is not necessarily the best predictor in finite samples. For the purpose of prediction, the conditional prediction error seems to be a better benchmark for model selection. For the purpose of explanation, the expected prediction error may be more effective. Of course, the amount of available data may drive the choice a researcher makes in practice.
+% 	\item \emph{Model averaging}. This chapter has focused on the selection of a single model based on predictive utility. If the goal is to obtain the best possible prediction, model averaging may be used instead. Model averaging involves aggregating the predictions from the set of candidates models, weighting the competing predictions according to the score function. The insights from the simulation results apply to this goal as well, and it is expected that model averaging using the LLTM-E2S would outperform the same using the LLTM.
+% \end{itemize}
+
+
+
+% \newpage
+%
+%
+% \section{Notes}
+%
+% \subsection{Automatic item generation}
+%
+% 	\begin{itemize}
+% 		\item \textcite{freund2008explaining}: AIG with figural matrix items.
+% 		\item \textcite{holling2009automatic}: AIG with probability word problems.
+% 		\item \textcite{cho2014additive}: ``In an item generation context, modeling the items can have two aims. First, given a dataset based on generated items, one may want to estimate the person traits (e.g., abilities) relying on a given statistical item model. Second, one may want to have an idea of the difficulty and discrimination of a generated item before it is generated, for example because one wants it to be optimally informative in an adaptive procedure. With such a purpose in mind, the item model needs to have a reasonable predictive value.''
+% 		\item \textcite{arendasy2005automatic}: AIG with more figure rotation type things.
+% 		\item \textcite{arendasy2007using}: AIG with algebra word problems
+% 		\item \textcite{arendasy2010evaluating}: AIG with mental rotation problems.
+% 		\item \textcite{arendasy2011using}: AIG with word fluency items.
+% 	\end{itemize}
+%
+% \subsection{About AIC}
+%
+% The description below is taken from \textcite{burnham2003model}. The notation here is unrelated to that in the rest of the chapter.
+%
+% Kullback-Leibler information (or distance) is
+% \begin{equation}
+% 	I(f,g) = \int f(x) \log \left ( \frac{f(x)}{g(x|\theta)} \right ) ~dx
+% \end{equation}
+% where $f$ is the true distribution function, $g$ is the model distribution function, $x$ is a dataset, and $\theta$ is the model parameters. This is the ``information lost when $g$ is used to approximate $f$.'' The above is for continuous distributions, and the authors provide a separate equation for discrete distributions. Further, $I(f,g)$ may be rewritten as
+% \begin{equation}
+% 	I(f,g) = \int f(x) \log f(x) ~dx - \int f(x) \log g(x|\theta) ~dx
+% \end{equation}
+% and then
+% \begin{equation}
+% 	I(f,g) = \mathrm{E}_f[\log f(x)] - \mathrm{E}_f[\log g(x|\theta)]
+% \end{equation}
+% and then
+% \begin{equation}
+% 	I(f,g) = C - \mathrm{E}_f[\log g(x|\theta)]
+% \end{equation}
+% where $C$ is a constant, usually unknown or ignored, that does not depend on choice of model $g$. In this way, $\mathrm{E}_f[\log g(x|\theta)]$ is \emph{relative} distance.
+%
+% The target quantity for AIC is the ``relative expected K-L distance''
+% \begin{equation}
+% 	\mathrm{E}_y \mathrm{E}_x [\log( g(x | \hat \theta(y)) )]
+% \end{equation}
+% where $x$ and $y$ are independent datasets (not independent and dependent variables) drawn from an unknown true distribution $f$ and $\hat \theta(y)$ are MLE parameter estimates resulting from the fit of the model to $y$.
+% (\cite{Kuha2004}, page 206, explains that the double expectation results from ``assuming the MLE is based on a separate, independent sample of data...'')
+% Both expectations are effectively taken with respect to $f$ (page 60). $\hat \theta(y)$ differs from the psuedo-true parameter values $\theta_0$ for model $g$, and $g(x | \hat \theta_0)$ minimizes the K-L distance (in comparison to other values for $\theta$). The ``key result'' is
+% \begin{equation}
+% 	\mathrm{E}_y \mathrm{E}_x [\log( g(x | \hat \theta(y)) )] \approx
+% 	\log( L(\hat \theta | data ) ) - K
+% \end{equation}
+% where $L(\hat \theta| data)$ is the log-likelihood of the fitted model and $K$ is the ``number of estimable parameters''. $K$ results from the use of $\hat \theta(y)$ instead of $\theta_0$, or in other words, due to the uncertainty in the estimated parameters. AIC is
+% \begin{equation}
+% 	\mathrm{AIC} = -2 \log(  L(\hat \theta|y)  ) + 2K
+% .\end{equation}
+% AIC is used to select the model that minimizes the ``expected value of this (conceptually) estimated K-L information'' (page 363):
+% \begin{equation}
+% 	\mathrm{E}_y \left [ I(f, g(\cdot | \hat \theta (y) )) \right ]
+% .\end{equation}
+%
+% My interpretations: In the previous paragraph, there is an abrupt switch from
+% 	$\log( L(\hat \theta | data ) )$
+% to
+% 	$\log( L(\hat \theta | y ) )$, which are presumably the same quantity.
+% This is how it goes in the chapter (page 61), and the switch is confusing and unexplained.
+%
+% Also, because the expectations above are taken over data $y$ in
+% 	$\mathrm{E}_y \mathrm{E}_x [\log( g(x | \hat \theta(y)) )]$,
+% I believe AIC is not conditional on the parameter estimates from the available data. Adopting a cross-validation viewpoint, I would say that
+% 	$\mathrm{E}_y \mathrm{E}_x [\log( g(x | \hat \theta(y)) )]$
+% represents the expected cross-validation log-likelihood, where a model is trained on $y$ and evaluated on $x$. Further, AIC approximates this quantity (times $-2$).
+%
+% \textcite{stone1977asymptotic} is credited (for example, by \cite{Hastie2009}) with showing that AIC is asymptotically equivalent to leave-one-out cross-validation. The paper it self is short but difficult to follow; it's mainly a mathematical proof lacking discussion.
+%
+% \textcite{Kuha2004} describes the ``asymptotic efficiency'' of AIC: ``the expected mean squared error of predictions from models selected by it is the smallest possible in large samples.'' I interpret this to mean that AIC selects the best available approximation to the true model. BIC does not share this characteristic. BIC is consistent: ``the probability of selecting the true model from a set of candidates tends to 1 as $n$ increases if the true model is one of the models under consideration and the true parameter value $\theta*$ remains fixed'' (see references in \cite{Kuha2004}, page 217).
+%
+% \textcite{Kuha2004} motivates AIC in terms of the K-L distance and connects this to cross-validation. \textcite{burnham2003model} do not connect AIC to cross-validation, while \textcite{Hastie2009} present AIC as a correction to the in-sample likelihood due to overfitting.
+%
+% \textcite{Kuha2004} (page 208) lists two requirements for AIC to be a good estimate. First, the sample sized is assumed to be large. Corrections for small samples exist, but must be derived for every model type. Second, the models are true (or that the smaller model in a nested comparison is true). This is because the AIC penalty (the 2) is a property of the true distribution. For untrue models, AIC is biased but has zero variance. ``Other, less biased, estimates for the same quanityt exist, but their variances must also be larger. Thus, the constant estimate used in $\mathrm{AIC}_e$, besides being trivial to calculate, is likely to have a lower mean quared error thant alternatives in many models in which its assumptions are at least roughly satisfied.
+%
+% \textcite{fang2011asymptotic} shows, in the context of linear mixed effects models, that ``the marginal Akaike information criterion is asymptotically equivalent to the leave-one-cluster-out cross-validation and the conditional Akaike information criterion is asymptotically equivalent to the leave-one-observation-out cross-validation.''
+%
+%
+% \subsection{Cross-validation}
+%
+% I should adopt the language ``holdout validation'' and drop ``holdout cross-validation'', as ``cross-validation'' seems to apply to $k$-fold, LOO, bootstrap CV, and the like. Nothing is ``crossed'' in holdout validation.
+%
+% \textcite{Hastie2009} suggest that there are two possible goals: model selection (choosing the best predictor) and model assessment (estimating the prediction error). In a data-rich situation, they say that a three part validation scheme is ideal: models are estimated in the ``training'' set, chosen based on loss in the ``validation'' set, and the prediction error for the final model is estimated on the ``test'' set. Single-dataset approaches (IC and CV) approximate the validation step.
+%
+% \emph{I think} that the error in the test dataset is an estimate of the conditional prediction error (conditional on the trained/fitted model), and that the error in the validation dataset is also a (potentially biased) estimate of the same. \emph{I think} that holdout validation is in this way different from single-dataset approaches like information criteria, $k$-fold CV, and leave-one-out CV. ``It does not seem possible to estimate conditional error effectively, given only the information in the same training set'' (\cite{Hastie2009}, page 220).
+%
+% \textcite{Hastie2009} say that CV approximates the expected test error. They provide a brief and not very clear discussion of whether cross-validation estimates the ``conditional test error''. They do a brief simulation comparing $k$-fold CV ($k=10$) and leave-one-out CV and conclude that neither estimates the conditional test error well. They also conclude that both ``are approximately unbiased for expected [test] error, but the variation in test error for different training sets is quite substantial.'' (In other words, the estimates have high variance, I think.)
+%
+% \textcite{arlot2010survey} mentions that the appeal of cross-validation methods is their universality, given that they are based on data splitting. They describe ``model selection for estimation'', which I think corresponds to estimating the expected error and choosing the model that minimizes the error. (The article relies heavily on stupid notation, so I may have to reread.) They mention efficiency and the oracle inequality (page 47). They alternative is ``model selection for identification'' (choosing the true model). The AIC-BIC dilemma (estimation versus identification) is mentioned with some probably useful references (page 48). Some papers on CV bias in the regression framework are mentioned (page 57).
+%
+% \textcite{arlot2010survey} discuss the merits of CV versus ``penalized criteria'' (page 71). ``The strongest argument for CV is its quasi-universality: Provided data are i.i.d., CV yields good model selection performances in (almost) any framework. Nevertheless, universality has a price: Compared to procedures designed to be optimal in a specific framework (like AIC), the model selection performances of CV can be less accurate, while its computational cost is higher.'' Later: ``More generally, because of its versatility, CV should be prefered to any model selection procedure relying on assumptions which are likely to be wrong.''
+
+
+\printbibliography
+
+\end{document}
+
