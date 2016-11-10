@@ -191,7 +191,7 @@ selector_labels <- c("dev_sameitems" = "HV same items",
 percents_df$Selector <- refactor(percents_df$selector, selector_labels)
 percents_df$Method <- refactor(percents_df$method, method_labels)
 
-variables_to_save <- c(variables_to_save, "percents_df")
+variables_to_save <- c(variables_to_save, "df_sel", "percents_df")
 
 
 # Plots for IC/CV penalties ----------------------------------------------------
@@ -267,25 +267,18 @@ variables_to_save <- c(variables_to_save, "df_penstack")
 
 # Data frame for prediction ----------------------------------------------------
 
-# Make data frame of relative deviances
-df_rel <- subset(df, variable == "dev_test")
-df_rel$variable <- NULL
-df_mean <- aggregate(value ~ method + seed + tau + nitems, df_rel, mean)
-names(df_mean)[names(df_mean) == "value"] <- "mean"
-df_rel <- merge(df_rel, df_mean)
-df_rel$relative <- df_rel$value - df_rel$mean
-df_rel[, c("value", "mean")] <- list(NULL)
-df_rel$Model <- as.factor(df_rel$model)
-df_rel$Method <- refactor(df_rel$method, method_labels)
+df_frmse_m <- subset(df, variable == "rmse_fix")
+df_frmse_m$variable <- NULL
+df_frmse_m <- aggregate(value ~ method + tau + nitems + model, df_frmse_m, mean)
+df_frmse_m$Model <- as.factor(df_frmse_m$model)
+df_frmse_m$Method <- refactor(df_frmse_m$method, method_labels)
 
-# Merge with selection data frame
-df_pred <- merge(subset(df_sel, selected), df_rel)
-df_predmean <- aggregate(relative ~ selector + tau + nitems + method,
-                         df_pred, mean)
-df_predmean$Selector <- refactor(df_predmean$selector, selector_labels)
-df_predmean$Method <- refactor(df_predmean$method, method_labels)
+df_frmse <- merge(subset(df_sel, selected), subset(df, variable == "rmse_fix"))
+df_frmse <- aggregate(value ~ selector + tau + nitems + method, df_frmse, mean)
+df_frmse$Selector <- refactor(df_frmse$selector, selector_labels)
+df_frmse$Method <- refactor(df_frmse$method, method_labels)
 
-variables_to_save <- c(variables_to_save, "df_rel", "df_predmean")
+variables_to_save <- c(variables_to_save, "df_frmse_m", "df_frmse")
 save(list = variables_to_save, file = "simulation part 2.Rdata")
 
 

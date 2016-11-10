@@ -67,6 +67,29 @@ my_theme <- theme_bw() +
   theme(text = element_text(family = "serif"),
         strip.background = element_rect(fill = NA, color = NA, size = .5),
         legend.key = element_rect(fill = NA, color = NA))
+
+grid_arrange_shared_legend <- function(..., ncol = length(list(...)), nrow = 1, 
+                                       position = c("bottom", "right")) {
+
+  plots <- list(...)
+  position <- match.arg(position)
+  g <- ggplotGrob(plots[[1]] + theme(legend.position = position))$grobs
+  legend <- g[[which(sapply(g, function(x) x$name) == "guide-box")]]
+  lheight <- sum(legend$height)
+  lwidth <- sum(legend$width)
+  gl <- lapply(plots, function(x) x + theme(legend.position="none"))
+  gl <- c(gl, ncol = ncol, nrow = nrow)
+
+  combined <- switch(position, 
+                     "bottom" = 
+                       arrangeGrob(do.call(arrangeGrob, gl), legend, ncol = 1,
+                         heights = unit.c(unit(1, "npc") - lheight, lheight)),
+                     "right" = arrangeGrob(do.call(arrangeGrob, gl), legend, 
+                         ncol = 2, widths = unit.c(unit(1, "npc") - lwidth, lwidth                      )))
+  grid.newpage()
+  grid.draw(combined)
+
+}
 @
 
 
@@ -422,6 +445,7 @@ The bias in $\hat \tau$ may be alleviated by using restricted maximum likelihood
 \begin{figure}[tb]
 \begin{center}
 <<bias_plot, fig = TRUE, height = 6>>=
+expand_bias <- range(subset(df_bias, model == 2, c("lower", "upper")))
 bias_1 <- ggplot(subset(df_bias, nitems == 32 & model == 2)) +
   aes(x = as.factor(tau), y = mean, ymin = lower, ymax = upper,
       color = factor(par)) +
@@ -431,10 +455,10 @@ bias_1 <- ggplot(subset(df_bias, nitems == 32 & model == 2)) +
   labs(list(x = expression(paste("Residual item SD (", tau, ")")),
             y = "Bias", color = NULL)) +
   scale_colour_manual(values = par_colors, labels = par_labels) +
+  expand_limits(y = expand_bias) +
   my_theme +
   theme(panel.grid.major.x = element_blank(),
         panel.grid.minor.x = element_blank())
-
 bias_2 <- ggplot(subset(df_bias, tau == .5 & model == 2)) +
   aes(x = as.factor(nitems), y = mean, ymin = lower, ymax = upper,
       color = factor(par)) +
@@ -444,11 +468,10 @@ bias_2 <- ggplot(subset(df_bias, tau == .5 & model == 2)) +
   labs(list(x = expression(paste("Number of items (", italic(I), ")")),
             y = "Bias", color = NULL)) +
   scale_colour_manual(values = par_colors, labels = par_labels) +
+  expand_limits(y = expand_bias) +
   my_theme +
   theme(panel.grid.major.x = element_blank(),
         panel.grid.minor.x = element_blank())
-
-
 grid.arrange(bias_1, bias_2, ncol = 1)
 @
 \end{center}
@@ -476,6 +499,7 @@ However, this is an improbable scenario as it requires perfect predictors for it
 \begin{figure}[tb]
 \begin{center}
 <<qq_plot, fig = TRUE, height = 6>>=
+expand_qq <- range(subset(df_recov, par == "beta6", "z"))
 qq_1 <- ggplot(subset(df_recov, par == "beta6" & nitems == 32)) +
   aes(sample = z) +
   geom_point(stat = "qq", size = .5) +
@@ -483,8 +507,8 @@ qq_1 <- ggplot(subset(df_recov, par == "beta6" & nitems == 32)) +
   xlab("Normal theoretical quantiles") + ylab("Observed quantiles") +
   facet_grid(tau + nitems ~ Method, labeller =
              label_bquote(rows = list(tau == .(tau), italic(I) == .(nitems)) )) +
+  expand_limits(y = expand_qq) +
   my_theme
-
 qq_2 <- ggplot(subset(df_recov, par == "beta6" & tau == .5)) +
   aes(sample = z) +
   geom_point(stat = "qq", size = .5) +
@@ -492,8 +516,8 @@ qq_2 <- ggplot(subset(df_recov, par == "beta6" & tau == .5)) +
   xlab("Normal theoretical quantiles") + ylab("") +
   facet_grid(tau + nitems ~ Method, labeller =
              label_bquote(rows = list(tau == .(tau), italic(I) == .(nitems)) )) +
+  expand_limits(y = expand_qq) +
   my_theme
-
 grid.arrange(qq_1, qq_2, nrow = 1)
 @
 \end{center}
@@ -572,102 +596,6 @@ As before, the likelihood ratio test and BIC are more conservative than AIC for 
 \Sexpr{and(f(log(unique(df_bias$nitems)), 2), "or")}
 depending on the number of items. The relative harshness of the penalties are reflected in the selection results presented in the figures. Unlike for the LLTM, AIC, BIC, and the likelihood ratio test appear more like holdout validation with new items when paired with the LLTM-E2S, and the three perform as expected in model selection.
 
-% Conditional versus expected prediction error.
-% For the LLTM-E2S, holdout validation with new items was less effective than AIC or LOCO-CV for selecting the generating model, but these selection strategies differ in an important regard; holdout validation selects a model based on the conditional test error while AIC and LOCO-CV select a model based on the expected test error. Holdout validation indicates the prediction error of a particular fitted model in a new dataset.
-% AIC and LOCO-CV, on the other hand, estimate how well a model will predict new data in expectation, over possible training datasets. In this way, AIC and LOCO-CV do not directly inform on the prediction error of fitted models given a set of parameter estimates. For these reasons, holdout validation may be preferred when the purpose is prediction per se, while AIC and LOCO-CV may be preferred for selecting a preferred model for explanation.
-
-
-\subsection{Comparison of predictive performance in evaluation data}
-
-In holdout validation, a model $m$ is evaluated by the holdout deviance,
-$\mathrm{dev}(y^\mathrm{e} | \hat \omega_{m^*}(y^\mathrm{t}))$,
-which is the deviance of the trained model when applied to the evaluation subset. For the purpose of comparing simulation results, it is useful to instead consider what I will call the relative holdout deviance,
-\begin{equation}
-	\mathrm{RHD}_m = 
-	\mathrm{dev}(y^\mathrm{e} | \hat \omega_{m}(y^\mathrm{t})) -
-  \frac{1}{M} \sum_{q=1}^M
-  \mathrm{dev}(y^\mathrm{e} | \hat \omega_{q}(y^\mathrm{t}))
-\end{equation}
-which is the holdout deviance for model $m$ minus the average holdout deviance for all $M$ models under consideration. The deviance for the same model across simulation replications is highly variable, and the RHD stabilizes this variation while maintaining the relative differences in deviance between competing models.
-
-The $\mathrm{RHD}_m$ is a useful means of comparing the predictive performance of the candidate models. Figure~\ref{fig:2-relative} presents the mean $\mathrm{RHD}_m$ for each model across simulation conditions for the LLTM and LLTM-E. The figure shows that Model~2, the data generating model, tends to provide the best predictions for new items except in low information conditions, in which case the simpler Model~1 performs better on average. (The LLTM with $I=16$ items deviates from this trend, however.) As mentioned earlier, the generating model does not always make the best predictions, particularly with limited data, and Figure~\ref{fig:2-relative} shows that some of the simulation conditions produce this phenomenon.
-
-To assess the differences in prediction accuracy between different selection criteria, let $\mathrm{RHD}_{m^*}$ represent the relative holdout deviance for the model chosen by a given selection criterion. In any given simulation replication, the various selection strategies may select a different preferred model $m^*$. Differences in the mean $\mathrm{RHD}_{m^*}$ across replications between the selection strategies are a function of $m^*$ only, given that $\omega_{m}(y^\mathrm{t})$ does not depend on the selection strategy. As an aside, a researcher would not ordinarily have an evaluation subset when employing single-dataset methods like cross-validation or information criteria, but the simulation study makes possible the consideration of what the predictive accuracy would be in an evaluation subset. 
-
-In this way the predictive utility of the various selection strategies may be compared, as depicted in Figure~\ref{fig:2-prediction}. Holdout validation with new items outperformed all other selection strategies in every simulation condition on the basis of $\mathrm{RHD}_{m^*}$. This result may seem surprising given that holdout validation with new items did not in general select Model~2 more often (recall Figures~\ref{fig:2-selection-tau} and \ref{fig:2-selection-nitems}) than the other selection strategies. 
-As mentioned earlier, holdout validation is conditional on the fitted model with estimated parameters $\omega_{m}(y^\mathrm{t})$, whereas AIC and cross-validation are not. This is related to the difference between what \textcite[][Chapter~7]{Hastie2009} referred to as conditional and expected error. In short, AIC and cross-validation estimate the expected error, and so are apt to select the model that makes the best predictions in expectation. In contrast, holdout validation estimates the conditional error, and so is apt to select the most predictive of the \emph{fitted} models, which are conditional on the training data.
-
-% 
-% In this way the predictive utility of different selection criteria may be evaluated by the values they obtain for $\mathrm{RHD}_m^*$. Though a researcher would not ordinarily have an evaluation subset when employing single-dataset methods like cross-validation or information criteria, the simulation study does have an evaluation subset that may be used to calculated $\mathrm{RHD}_m^*$ even for these selection approaches. Figure~\ref{fig:2-prediction} presents this result for the simulation. Across the board, holdout validation with new items performs better than the other methods, though results are sometimes close with the LLTM.
-% 
-% I focus on the results for the LLTM-E2S. It should not be surprising that predictions from holdout validation with new items outperforms those from holdout validation with the same items. However, holdout validation with new items also provided better predictions than AIC and LOCO-CV in all simulation conditions, even though these were found to select the true model more often for some conditions (as in Figures~\ref{fig:2-selection-tau} and \ref{fig:2-selection-nitems}). All three of these selection methods should reliably select the most predictive model (not necessarily the true model) as sample size becomes large. In the bottom right panel of Figure~\ref{fig:2-prediction}, it may be seen that both AIC and LOCO-CV approach the performance of holdout validation with new items as the number of items increases.
-
-\begin{figure}[tb]
-\begin{center}
-<<relative_plot, fig = TRUE, height = 6>>=
-rel_1 <- ggplot(subset(df_rel, nitems == 32)) +
-  aes(y=relative, x = tau, color = Model, pch = Model) +
-  stat_summary_bin(geom="point", fun.y = mean) +
-  stat_summary_bin(geom="line", fun.y = mean)  +
-  facet_wrap(~Method, scales = "free_y") +
-  xlab(expression(paste("Residual item SD (", tau, ")"))) + 
-  ylab("Relative deviance") +
-  scale_x_continuous(breaks = unique(df_rel$tau)) +
-  my_theme +
-  theme(panel.grid.minor = element_blank())
-
-rel_2 <- ggplot(subset(df_rel, tau == .5)) +
-  aes(y=relative, x = nitems, color = Model, pch = Model) +
-  stat_summary_bin(geom="point", fun.y = mean) +
-  stat_summary_bin(geom="line", fun.y = mean)  +
-  facet_wrap(~Method, scales = "free_y")+
-  xlab(expression(paste("Number of items (", italic(I), ")"))) +
-  ylab("Relative deviance") +
-  scale_x_continuous(breaks = unique(df_rel$nitems)) +
-  my_theme +
-  theme(panel.grid.minor = element_blank())
-
-grid.arrange(rel_1, rel_2, ncol = 1)
-@
-\end{center}
-\caption{The mean relative holdout deviance ($\mathrm{RHD}_m$) across simulation replications for each model. The top panel column shows simulation replications in which the residual item standard deviation ($\tau$) varies while the number of items is held at 32, and the bottom panel shows replications in which the number of items varies while $\tau$ is held at .5.}
-\label{fig:2-relative}
-\end{figure}
-
-\begin{figure}[tb]
-\begin{center}
-<<prediction_plot, fig = TRUE, height = 6>>=
-pred_theme <- my_theme +
-    theme(panel.grid.minor = element_blank(),
-        strip.text.x = element_text(size = 9),
-        axis.text.x = element_text(size = 8))
-
-pred_1 <- ggplot(subset(df_predmean, nitems == 32)) +
-  aes(y=relative, x = tau) +
-  geom_point() + geom_line() +
-  facet_grid(Method ~ Selector, scales = "free_y") +
-  xlab(expression(paste("Residual item SD (", tau, ")"))) + 
-  ylab("Mean relative deviance") +
-  scale_x_continuous(breaks = unique(df_predmean$tau)) +
-  pred_theme
-
-
-pred_2 <- ggplot(subset(df_predmean, tau == .5)) +
-  aes(y=relative, x = nitems) +
-  geom_point() + geom_line() +
-  facet_grid(Method ~ Selector, scales = "free_y") +
-  xlab(expression(paste("Number of items (", italic(I), ")"))) +
-  ylab("Mean relative deviance") +
-  scale_x_continuous(breaks = unique(df_predmean$nitems)) +
-  pred_theme
-
-grid.arrange(pred_1, pred_2, ncol = 1)
-@
-\end{center}
-\caption{The mean relative holdout deviance ($\mathrm{RHD}_m$) across simulation replications for the selected model by selection criterion. The top panel column shows simulation replications in which the residual item standard deviation ($\tau$) varies while the number of items is held at 32, and the bottom panel shows replications in which the number of items vary while $\tau$ is held at .5. LOCO-CV was not performed for the LLTM.}
-\label{fig:2-prediction}
-\end{figure}
-
 
 \subsection{Implied penalties associated with holdout validation}
 
@@ -744,6 +672,101 @@ grid.arrange(p_est_1, p_est_2, ncol = 1)
 \caption{
 Estimated penalties implied by holdout validation with new items ($\hat d_{\mathrm{HV}}$), AIC $d_\mathrm{AIC}$, and LOCO-CV ($\hat d_{\mathrm{CV}}$) for the LLTM and LLTM-E2S. The top set of plots shows simulation replications in which the residual item standard deviation ($\tau$) varies while the number of items is held at 32, and the bottom set shows replications in which the number of items vary while $\tau$ is held at .5. LOCO-CV was not performed with the LLTM.}
 \label{fig:2-penalty}
+\end{figure}
+
+
+\subsection{Comparison of predictive performance}
+
+Two ways of assessing the accuracy of item predictions may be considered. The root mean squared error of prediction for model $m$ is
+\begin{equation}
+	\mathrm{RMSE}_m = 
+	\sqrt{\frac{1}{I} \sum_{i=1}^I 
+	  \left [ 
+	    x_i'\hat\beta_m(y^\mathrm{t}) - \delta_i(y^\mathrm{e}) 
+	  \right ]^2}
+,\end{equation}
+where $\hat\beta_m(y^\mathrm{t})$ is a vector of coefficients for model $m$ estimated on the training subset $y^\mathrm{t}$ and $\delta_i(y^\mathrm{e})$ are true item difficulties (fixed plus residual parts) associated with the evaluation data $y^\mathrm{e}$. The $\mathrm{RMSE}_m$ is based on the difference between the predicted item difficulty (without residual) and the true item difficulty (with residual) in a different subset. The ``fixed'' root mean squared error of prediction for model $m$ is
+\begin{equation}
+	\mathrm{FRMSE}_m = 
+	\sqrt{\frac{1}{I} \sum_{i=1}^I 
+	  \left [ 
+	    x_i'\hat\beta_m(y^\mathrm{t}) - x_i'\beta) 
+	  \right ]^2}
+,\end{equation}
+where $\beta$ are the true coefficients. The $\mathrm{FRMSE}_m$ is based on the difference between the predicted item difficulty (without residual) and fixed part of the true item difficulty (without residual). In both equations, $x_i$ are predictors from the evaluation subset, though in this simulation $x_i$ are the same across subsets. Results for $\mathrm{RMSE}_m$ are highly dependent on the residual standard deviation $\sigma$, so I report $\mathrm{FRMSE}_m$. Further, let $\mathrm{FRMSE}_{m^*}$ be the fixed root mean squared error of prediction for the model chosen as best by a given selection strategy.
+
+Figure~\ref{fig:2-frmse} presents the fixed root mean squared error of prediction for the model chosen by the several selection strategies. Predictably, the high information simulation conditions yield much smaller prediction errors in comparison to the low information conditions. The LLTM-E2S tends to make better predictions than the LLTM, but this difference is generally quite small. Likewise, holdout validation with new items better than the other selection approaches but only by a very small degree.
+
+<<frmse_setup>>=
+df_frmse_expand <- range(df_frmse$value)
+frmse_1 <- ggplot(subset(df_frmse, nitems == 32)) +
+  aes(y=value, x = tau, pch = Method, lty = Method) +
+  geom_point() + geom_line() +
+  facet_wrap(~Selector, nrow = 1) +
+  xlab(expression(paste("Residual item SD (", tau, ")"))) + 
+  ylab(expression(paste(FRMSE[italic(m)^symbol("\52")]))) +
+  scale_x_continuous(breaks = unique(df_frmse$tau)) +
+  expand_limits(y = df_frmse_expand) +
+  my_theme + 
+  theme(panel.grid.minor.x = element_blank())
+frmse_2 <- ggplot(subset(df_frmse, tau == .5)) +
+  aes(y = value, x = nitems, pch = Method, lty = Method) +
+  geom_point() + geom_line() +
+  facet_wrap(~Selector, nrow = 1) +
+  xlab(expression(paste("Number of items (", italic(I), ")"))) +
+  ylab(expression(paste(FRMSE[italic(m)^symbol("\52")]))) +
+  scale_x_continuous(breaks = unique(df_frmse$nitems)) +
+  expand_limits(y = df_frmse_expand) +
+  my_theme + 
+  theme(panel.grid.minor.x = element_blank())
+# grid_arrange_shared_legend(frmse_1, frmse_2, ncol = 1, nrow = 2, 
+#                            position = "bottom")
+grid.arrange(frmse_1, frmse_2, ncol = 1)
+@
+\begin{figure}[tb]
+\begin{center}
+<<frmse_plot, fig = TRUE>>=
+<<frmse_setup>>
+@
+\end{center}
+\caption{The mean fixed root mean squared error of prediction for the selected model $\mathrm{FRMSE}_m$ across simulation replications. The top panel column shows simulation replications in which the residual item standard deviation ($\tau$) varies while the number of items is held at 32, and the bottom panel shows replications in which the number of items varies while $\tau$ is held at .5.}
+\label{fig:2-frmse}
+\end{figure}
+
+Figure~\ref{fig:2-frmse-m}
+
+\begin{figure}[tb]
+\begin{center}
+<<frmse_m_plot, fig = TRUE>>=
+df_frmse_m_expand <- range(df_frmse_m$value)
+frmse_m_1 <- ggplot(subset(df_frmse_m, nitems == 32)) +
+  aes(y=value, x = tau, color = Model, pch = Model) +
+  geom_point() + geom_line() +
+  stat_summary_bin(geom="line", fun.y = mean)  +
+  facet_wrap(~Method, scales = "free_y") +
+  xlab(expression(paste("Residual item SD (", tau, ")"))) + 
+  ylab(expression(FRMSE[m])) +
+  scale_x_continuous(breaks = unique(df_frmse_m$tau)) +
+  expand_limits(y = df_frmse_m_expand) +
+  my_theme + 
+  theme(panel.grid.minor.x = element_blank())
+frmse_m_2 <- ggplot(subset(df_frmse_m, tau == .5)) +
+  aes(y=value, x = nitems, color = Model, pch = Model) +
+  geom_point() + geom_line() +
+  facet_wrap(~Method, scales = "free_y")+
+  xlab(expression(paste("Number of items (", italic(I), ")"))) +
+  ylab(expression(FRMSE[m])) +
+  scale_x_continuous(breaks = unique(df_frmse_m$nitems)) +
+  expand_limits(y = df_frmse_m_expand) +
+  my_theme + 
+  theme(panel.grid.minor.x = element_blank())
+# grid_arrange_shared_legend(frmse_m_1, frmse_m_2, ncol = 1, nrow = 2, 
+#                            position = "bottom")
+grid.arrange(frmse_m_1, frmse_m_2, ncol = 1)
+@
+\end{center}
+\caption{The top panel column shows simulation replications in which the residual item standard deviation ($\tau$) varies while the number of items is held at 32, and the bottom panel shows replications in which the number of items varies while $\tau$ is held at .5.}
+\label{fig:2-frmse-m}
 \end{figure}
 
 
