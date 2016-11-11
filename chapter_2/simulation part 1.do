@@ -8,42 +8,33 @@ capture program drop sim_dataset
 program define sim_dataset, rclass
 	
 	syntax [, nitems(integer 32) npersons(integer 500) ///
-		tau(real .5) sigma(real 1) seed(integer -1) ]
+		 sigma(real 1.5) tau(real .5) b(real .5) seed(integer -1) ]
 	
-	// Hard coded coefficients
-	local beta1 = -.5
-	local beta2 = 1
-	local beta3 = .5
-	local beta4 = .5
-	local beta5 = -.5
+	// Coefficients
+	local beta1 = 0
+	local beta2 = `b'
+	local beta3 = `b'
+	local beta4 = `b'
 	
 	// Use seed if one is provided
 	clear
 	if(`seed' > -1) set seed `seed'
 	
-	// Set up dataset of crossed dummy covariates x3 and x4
-	quietly set obs 2
-	forvalues i = 3/4 {
-		egen x`i' = seq(), from(0) to(1)
-	}
-	fillin x*
-	
-	// Expand data to I items and add continuous covariate x2
-	generate temp_one = 1
-	quietly: expandcl `=`nitems'/_N', cluster(temp_one) generate(temp_item_set)
-	sort temp_item_set x3 x4
+	// Set up dataset of item covariates
+	quietly set obs `nitems'
 	generate item = _n
-	quietly summarize temp_item_set
-	generate x2 = (temp_item_set - 1) / (r(max) - 1) * 2 - 1
-	order item x2 x3 x4
+	forvalues i = 2/5 {
+		generate x`i' = rnormal()
+	}
 	
 	// Generate "fixed" and "random" parts of item difficulties
-	generate xB = `beta1' + `beta2'*x2 + `beta3'*x3 + `beta4'*x4 + `beta5'*x2*x3
+	generate xB = `beta1' + `beta2'*x2 + `beta3'*x3 + `beta4'*x4
 	generate epsilon_training = rnormal(0, `tau')
 	generate epsilon_validation = rnormal(0, `tau')
 	generate epsilon_test = rnormal(0, `tau')
 	
 	// Expand dataset to P persons and generate abilities
+	generate temp_one = 1
 	quietly: expandcl `npersons', cluster(temp_one) generate(person)
 	quietly: generate temp_theta_training = rnormal(0, `sigma') if item == 1
 	quietly: bysort person: egen theta_training = mean(temp_theta_training)
@@ -82,16 +73,11 @@ program define sim_dataset, rclass
 	quietly generate ll_train = log(normalden(0, 0, se_train))
 	quietly summarize ll_train
 	return scalar dev_meta = -2 * r(sum)
-	
-	// Report rmse for Rasch in test data
-	rmse, predict_var(b_test)
-	return scalar rmse_full = r(rmse_full)
-	return scalar rmse_fix = r(rmse_fix)
 			
 	return scalar converge_fails = `converge_fails'
 	
 	sort person item
-	drop _fillin temp_*
+	drop temp_*
 	
 end
 
@@ -164,8 +150,8 @@ preserve
 	local cols : colnames B
 	local cols `=subinstr("`cols'", "x", "beta", .)'
 	local cols `=subinstr("`cols'", "c.", "", .)'
-	local cols `=subinstr("`cols'", "beta2#beta3", "beta5", .)'
-	local cols `=subinstr("`cols'", "beta2#beta4", "beta6", .)'
+	//local cols `=subinstr("`cols'", "beta2#beta3", "beta5", .)'
+	//local cols `=subinstr("`cols'", "beta2#beta4", "beta6", .)'
 	local cols `=subinstr("`cols'", "_cons", "beta1", 1)'
 	local cols `=subinstr("`cols'", "_cons", "sigmasq", 1)'
 	forvalues j = 1/`=colsof(B)' {
@@ -237,8 +223,8 @@ preserve
 	local cols `=regexr("`cols'", "c.se_train#c.M", "drop")'
 	local cols `=subinstr("`cols'", "x", "beta", .)'
 	local cols `=subinstr("`cols'", "c.", "", .)'
-	local cols `=subinstr("`cols'", "beta2#beta3", "beta5", .)'
-	local cols `=subinstr("`cols'", "beta2#beta4", "beta6", .)'
+	//local cols `=subinstr("`cols'", "beta2#beta3", "beta5", .)'
+	//local cols `=subinstr("`cols'", "beta2#beta4", "beta6", .)'
 	local cols `=subinstr("`cols'", "_cons", "beta1", 1)'
 	local cols `=subinstr("`cols'", "_cons", "drop", 1)'
 	local cols `=subinstr("`cols'", "_cons", "tausq", 1)'
@@ -279,14 +265,6 @@ preserve
 	`quietly' summarize ll_loo
 	return scalar dev_loo = -2*r(sum)
 	
-	// TRMSEA
-	//generate ll_saturated = log(normalden(0, 0, se))
-	//quietly summarize ll_saturated
-	//local dev_saturated = -2*r(sum)
-	//local df = e(N) - e(rank)
-	//return scalar rmsea = ///
-	//	sqrt(1/(e(N)*`df') * max(`dev_insample' - `dev_saturated' - `df', 0))
-	
 	return scalar converge_fails = `converge_fails'
 	
 restore
@@ -297,46 +275,47 @@ end
 
 // Import random number seeds
 import delimited "random.txt", delimiter(tab) varnames(nonames) clear
-rename v`s' seed
-drop v*
 keep in 1/510
 
 // Set up simulation conditions, store in a matrix
 egen condition = seq(), from(1) to(5)
-generate double tau = .5
-replace tau = .2 if condition == 1
-replace tau = 1 if condition == 3
+generate double Vsq = 1.5^2
+generate double Rsq = .6
+replace Rsq = .3 if condition == 1
+replace Rsq = .9 if condition == 3
+generate double upsilon = sqrt(Rsq*Vsq)
+generate double tau = sqrt(Vsq - upsilon^2)
+generate double b = sqrt(upsilon^2 / 3)
 generate nitems = 32
 replace nitems = 16 if condition == 4
 replace nitems = 64 if condition == 5
+generate double sigma = 1.5
 generate npersons = 500
+generate seed = v`s'
 mkmat *, matrix(SIM)
+
+// Save a file describing each condition
+keep in 1/5 
+drop v* seed
+save conditions, replace
 clear
 
 // Define models (predictors)
-local m1 "x2-x4"
-local m2 "x2-x4 c.x2#c.x3"
-local m3 "x2-x4 c.x2#c.x3 c.x2#c.x4"
+local m1 "x2-x3"
+local m2 "x2-x4"
+local m3 "x2-x5"
 
 // Prepare to store results
-postfile memhold_rasch double(   ///
+postfile memhold_sim double(     ///
 		seed                     ///
 		condition                ///
-		tau                      ///
-		nitems                   ///
-		npersons                 ///
 		converge_fails           ///
 		dev_meta                 ///
 		dev_rasch                ///
-		rmse_full                ///
-		rmse_fix                 ///
-	) using results_rasch_`s', replace
+	) using results_sim_`s', replace
 postfile memhold_lltm double(    ///
 		seed                     ///
 		condition                ///
-		tau                      ///
-		nitems                   ///
-		npersons                 ///
 		model                    ///
 		converge_fails           ///
 		dev_intest     ///
@@ -347,8 +326,6 @@ postfile memhold_lltm double(    ///
 		sigmasq_est    ///
 		beta1_se       ///
 		beta1_est      ///
-		beta6_se       ///
-		beta6_est      ///
 		beta5_se       ///
 		beta5_est      ///
 		beta4_se       ///
@@ -366,9 +343,6 @@ postfile memhold_lltm double(    ///
 postfile memhold_twostage double(    ///
 		seed                     ///
 		condition                ///
-		tau                      ///
-		nitems                   ///
-		npersons                 ///
 		model                    ///
 		converge_fails           ///
 		dev_loo       ///
@@ -380,8 +354,6 @@ postfile memhold_twostage double(    ///
 		tausq_est     ///
 		beta1_se      ///
 		beta1_est     ///
-		beta6_se      ///
-		beta6_est     ///
 		beta5_se      ///
 		beta5_est     ///
 		beta4_se      ///
@@ -404,21 +376,19 @@ forvalues i = 1/`=rowsof(SIM)' {
 	display "$S_TIME: Starting `i' of `=rowsof(SIM)'"
 
 	timer on 1
-	sim_dataset, npersons(500) sigma(1) ///
-		seed(`=el(SIM, `i', colnumb(SIM, "seed"))') ///
-		nitems(`=el(SIM, `i', colnumb(SIM, "nitems"))') /// 
-		tau(`=el(SIM, `i', colnumb(SIM, "tau"))')
-	post memhold_rasch ///
+	sim_dataset, ///
+		nitems(`=el(SIM, `i', colnumb(SIM, "nitems"))') ///
+		npersons(`=el(SIM, `i', colnumb(SIM, "npersons"))') ///
+		sigma(`=el(SIM, `i', colnumb(SIM, "sigma"))') ///
+		tau(`=el(SIM, `i', colnumb(SIM, "tau"))') ///
+		b(`=el(SIM, `i', colnumb(SIM, "b"))') ///
+		seed(`=el(SIM, `i', colnumb(SIM, "seed"))')
+	post memhold_sim ///
 		(`=el(SIM, `i', colnumb(SIM, "seed"))') ///
 		(`=el(SIM, `i', colnumb(SIM, "condition"))') ///
-		(`=el(SIM, `i', colnumb(SIM, "tau"))') ///
-		(`=el(SIM, `i', colnumb(SIM, "nitems"))') ///
-		(`=el(SIM, `i', colnumb(SIM, "npersons"))') ///
 		(r(converge_fails))  ///
 		(r(dev_meta)      )  ///
-		(r(dev_rasch)     )  ///
-		(r(rmse_full)     )  ///
-		(r(rmse_fix)      )
+		(r(dev_rasch)     )
 	timer off 1
 	
 	forvalues m = 1/3 {
@@ -428,9 +398,6 @@ forvalues i = 1/`=rowsof(SIM)' {
 		post memhold_lltm ///
 			(`=el(SIM, `i', colnumb(SIM, "seed"))') ///
 			(`=el(SIM, `i', colnumb(SIM, "condition"))') ///
-			(`=el(SIM, `i', colnumb(SIM, "tau"))') ///
-			(`=el(SIM, `i', colnumb(SIM, "nitems"))') ///
-			(`=el(SIM, `i', colnumb(SIM, "npersons"))') ///
 			(`m') ///
 			(r(converge_fails)) ///
 			(r(dev_intest   ))  ///
@@ -441,8 +408,6 @@ forvalues i = 1/`=rowsof(SIM)' {
 			(r(sigmasq_est  ))  ///
 			(r(beta1_se     ))  ///
 			(r(beta1_est    ))  ///
-			(r(beta6_se     ))  ///
-			(r(beta6_est    ))  ///
 			(r(beta5_se     ))  ///
 			(r(beta5_est    ))  ///
 			(r(beta4_se     ))  ///
@@ -463,9 +428,6 @@ forvalues i = 1/`=rowsof(SIM)' {
 		post memhold_twostage ///
 			(`=el(SIM, `i', colnumb(SIM, "seed"))') ///
 			(`=el(SIM, `i', colnumb(SIM, "condition"))') ///
-			(`=el(SIM, `i', colnumb(SIM, "tau"))') ///
-			(`=el(SIM, `i', colnumb(SIM, "nitems"))') ///
-			(`=el(SIM, `i', colnumb(SIM, "npersons"))') ///
 			(`m') ///
 			(r(converge_fails)) ///
 			(r(dev_loo      ))  ///
@@ -477,8 +439,6 @@ forvalues i = 1/`=rowsof(SIM)' {
 			(r(tausq_est    ))  ///
 			(r(beta1_se     ))  ///
 			(r(beta1_est    ))  ///
-			(r(beta6_se     ))  ///
-			(r(beta6_est    ))  ///
 			(r(beta5_se     ))  ///
 			(r(beta5_est    ))  ///
 			(r(beta4_se     ))  ///
@@ -501,11 +461,11 @@ forvalues i = 1/`=rowsof(SIM)' {
 timer off 4
 timer list
 
-postclose memhold_rasch
+postclose memhold_sim
 postclose memhold_twostage
 postclose memhold_lltm
 
 // Save an example dataset
-clear
-sim_dataset
-save example, replace
+// clear
+// sim_dataset
+// save example, replace
