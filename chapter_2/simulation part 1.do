@@ -15,68 +15,66 @@ program define sim_dataset, rclass
 	local beta2 = `b'
 	local beta3 = `b'
 	local beta4 = `b'
+	local beta5 = `b'
 	
 	// Use seed if one is provided
 	clear
 	if(`seed' > -1) set seed `seed'
 	
-	// Set up dataset of item covariates
-	quietly set obs `nitems'
-	generate item = _n
-	forvalues i = 2/5 {
+	// Set up the items for all subsets but same items validation
+	quietly set obs 3
+	quietly generate subset = "training"
+	quietly replace subset = "newitems" in 2
+	quietly replace subset = "evaluation" in 3
+	quietly expandcl `nitems', cluster(subset) generate(item)
+	generate x1 = 1
+	forvalues i = 2/4 {
 		generate x`i' = rnormal()
 	}
-	
-	// Generate "fixed" and "random" parts of item difficulties
-	generate xB = `beta1' + `beta2'*x2 + `beta3'*x3 + `beta4'*x4
-	generate epsilon_training = rnormal(0, `tau')
-	generate epsilon_validation = rnormal(0, `tau')
-	generate epsilon_test = rnormal(0, `tau')
+	generate xB = ///
+		`beta1'*x1 + `beta2'*x2 + `beta3'*x3 + `beta4'*x4 + `beta5'*x2*x3
+	generate epsilon = rnormal(0, `tau')
+
+	// Add in items from same items validation by copying from training subset
+	quietly expand 2 if subset == "training", generate(temp_item)
+	quietly replace subset = "sameitems" if temp_item
 	
 	// Expand dataset to P persons and generate abilities
-	generate temp_one = 1
-	quietly: expandcl `npersons', cluster(temp_one) generate(person)
-	quietly: generate temp_theta_training = rnormal(0, `sigma') if item == 1
-	quietly: bysort person: egen theta_training = mean(temp_theta_training)
-	quietly: generate temp_theta_validation = rnormal(0, `sigma') if item == 1
-	quietly: bysort person: egen theta_validation = mean(temp_theta_validation)
-	quietly: generate temp_theta_test = rnormal(0, `sigma') if item == 1
-	quietly: bysort person: egen theta_test = mean(temp_theta_test)
+	quietly generate temp_one = 1
+	quietly expandcl `npersons', cluster(temp_one) generate(temp_person)
+	quietly generate pick = temp_person == 1
+	egen person = group(subset temp_person)
+	egen temp_tag = tag(subset person)
+	quietly generate temp_theta = rnormal(0, `sigma') if temp_tag
+	quietly bysort person: egen theta = mean(temp_theta)
+	sort person item
 	
 	// Simulate responses
-	generate y_train = /// Training response data
-		rbinomial(1, invlogit(theta_training - xB - epsilon_training))
-	generate y_newitems = /// Validation data with new items
-		rbinomial(1, invlogit(theta_validation - xB - epsilon_validation))
-	generate y_sameitems = /// Validation data with same items
-		rbinomial(1, invlogit(theta_validation - xB - epsilon_training))
-	generate y_test = /// Test data
-		rbinomial(1, invlogit(theta_test - xB - epsilon_test))	
-	
+	generate y = rbinomial(1, invlogit(theta - xB - epsilon))
+
 	// Set up meta-analysis dataset
 	local converge_fails = 0
-	quietly summarize item
-	local I = r(max)
-	sort person item
-	foreach n in train newitems sameitems test {
-		quietly melogit y_`n' ibn.item, noconstant || person:
+	quietly generate delta = .
+	quietly generate delta_se = .
+	foreach s in training newitems sameitems evaluation {
+		quietly melogit y ibn.item if subset == "`s'", noconstant || person:
 		if (e(converged) == 0) local ++converge_fails
 		// Return training sample Rasch deviance
-		if ("`n'" == "train") return scalar dev_rasch = -2*e(ll)
-		matrix A_`n' = r(table)
-		matrix B_`n' = A_`n'[1..2, 1..`I']'
-		svmat B_`n', names(col)
-		rename (b se) (b_`n' se_`n')
+		if ("`s'" == "training") return scalar dev_rasch = -2*e(ll)
+		quietly predict temp_delta if subset == "`s'", xb
+		quietly replace delta = temp_delta if subset == "`s'"
+		quietly predict temp_delta_se if subset == "`s'", stdp
+		quietly replace delta_se = temp_delta_se if subset == "`s'"
+		drop temp_*
 	}
 	
 	// Return training sample "Rasch" meta-regression deviance
-	quietly generate ll_train = log(normalden(0, 0, se_train))
-	quietly summarize ll_train
+	quietly generate temp_ll = log(normalden(0, 0, delta_se))
+	quietly summarize temp_ll if subset == "training"
 	return scalar dev_meta = -2 * r(sum)
 			
 	return scalar converge_fails = `converge_fails'
 	
-	sort person item
 	drop temp_*
 	
 end
@@ -91,7 +89,7 @@ program define rmse, rclass
 	
 	tempvar delta_hat squared_error
 	
-	if (e(cmd) == "meglm") local if "if person == 1"
+	if (e(cmd) == "meglm") local if "if pick"
 	
 	// note: delta_hat is easiness, so sign is reversed
 	if ("`predict_var'" == "") {
@@ -101,12 +99,12 @@ program define rmse, rclass
 		quietly generate `delta_hat' = `predict_var' `if'
 	}
 	
-	quietly generate `squared_error' = (-1*`delta_hat' - (xB + epsilon_test))^2
-	quietly summarize `squared_error'
+	quietly generate `squared_error' = (-1*`delta_hat' - xB + epsilon)^2
+	quietly summarize `squared_error' if subset == "evaluation"
 	return scalar rmse_full = sqrt(r(mean))
 	
-	quietly replace `squared_error' = (-1*`delta_hat' - (xB))^2
-	quietly summarize `squared_error'
+	quietly replace `squared_error' = (-1*`delta_hat' - xB)^2
+	quietly summarize `squared_error' if subset == "evaluation"
 	return scalar rmse_fix = sqrt(r(mean))
 	
 end
@@ -130,8 +128,8 @@ preserve
 	local converge_fails = 0
 	
 	// Fit to training data
-	`quietly' melogit y_train `varlist' || person:
-	return scalar dev_train = -2 * e(ll)
+	`quietly' melogit y `varlist' if subset == "training" || person:
+	return scalar dev_training = -2 * e(ll)
 	if (e(converged) == 0) local ++converge_fails
 	matrix B = r(table)
 	matrix E = e(b)
@@ -150,8 +148,8 @@ preserve
 	local cols : colnames B
 	local cols `=subinstr("`cols'", "x", "beta", .)'
 	local cols `=subinstr("`cols'", "c.", "", .)'
-	//local cols `=subinstr("`cols'", "beta2#beta3", "beta5", .)'
-	//local cols `=subinstr("`cols'", "beta2#beta4", "beta6", .)'
+	local cols `=subinstr("`cols'", "beta2#beta3", "beta5", .)'
+	local cols `=subinstr("`cols'", "beta2#beta4", "beta6", .)'
 	local cols `=subinstr("`cols'", "_cons", "beta1", 1)'
 	local cols `=subinstr("`cols'", "_cons", "sigmasq", 1)'
 	forvalues j = 1/`=colsof(B)' {
@@ -160,19 +158,20 @@ preserve
 		return scalar `cname'_se = el(B,2,`j')
 	}
 	
-	// Get HV deviance HV in validation and test data
+	// Get HV deviance HV in validation and evaluation data
 	local cols : colfullnames E
-	foreach m in newitems sameitems test {
-		matrix E_`m' = E
-		matrix colnames E_`m' = `=subinstr("`cols'", "_train", "_`m'", .)'
-		`quietly' melogit y_`m' `varlist' || person:, asis from(E_`m') iterate(0)
-		return scalar dev_`m' = -2 * e(ll)
+	foreach s in newitems sameitems evaluation {
+		matrix E_`s' = E
+		matrix colnames E_`s' = `=subinstr("`cols'", "_training", "_`s'", .)'
+		`quietly' melogit y `varlist' if subset == "`s'" || person:, ///
+			asis from(E_`s') iterate(0)
+		return scalar dev_`s' = -2 * e(ll)
 	}
 	
-	// Get insample deviance from test data
-	`quietly' melogit y_test `varlist' || person:
+	// Get insample deviance from evaluation data
+	`quietly' melogit y `varlist' if subset == "evaluation" || person:
 	if (e(converged) == 0) local ++converge_fails
-	return scalar dev_intest = -2 * e(ll)
+	return scalar dev_ineval = -2 * e(ll)
 	
 	return scalar converge_fails = `converge_fails'
 	
@@ -188,7 +187,7 @@ preserve
 
 	syntax varlist (fv), [noquietly]
 	
-		if ("`quietly'" == "noquietly") {
+	if ("`quietly'" == "noquietly") {
 		local quietly ""
 	}
 	else {
@@ -196,20 +195,21 @@ preserve
 	}
 	
 	local converge_fails = 0
-	`quietly' summarize item
-	local I = r(max)
+	`quietly' keep if pick
+	local I = _N / 4
 	
 	// Training data estimation
-	`quietly' gsem (b_train <- c.se_train#c.M@1 `varlist'), variance(M@1)
-	return scalar dev_train = -2 * e(ll)
+	`quietly' gsem (delta <- c.delta_se#c.M@1 `varlist') ///
+		if subset == "training", variance(M@1)
+	return scalar dev_training = -2 * e(ll)
 	matrix B =  r(table)
 	matrix E = e(b)
 	if (e(converged) == 0) local ++converge_fails
-	predict delta_hat_training, eta conditional(fixedonly)
-	generate tausq = el(E, 1, colsof(E))
+	quietly predict delta_hat, eta conditional(fixedonly)
+	quietly generate tausq = el(E, 1, colsof(E))
 	
 	// Get RMSE for HV
-	rmse, predict_var(delta_hat_training)
+	rmse, predict_var(delta_hat)
 	return scalar rmse_full = r(rmse_full)
 	return scalar rmse_fix = r(rmse_fix)
 	
@@ -220,11 +220,11 @@ preserve
 	
 	// Return parameter estimates
 	local cols : colnames B
-	local cols `=regexr("`cols'", "c.se_train#c.M", "drop")'
+	local cols `=regexr("`cols'", "c.delta_se#c.M", "drop")'
 	local cols `=subinstr("`cols'", "x", "beta", .)'
 	local cols `=subinstr("`cols'", "c.", "", .)'
-	//local cols `=subinstr("`cols'", "beta2#beta3", "beta5", .)'
-	//local cols `=subinstr("`cols'", "beta2#beta4", "beta6", .)'
+	local cols `=subinstr("`cols'", "beta2#beta3", "beta5", .)'
+	local cols `=subinstr("`cols'", "beta2#beta4", "beta6", .)'
 	local cols `=subinstr("`cols'", "_cons", "beta1", 1)'
 	local cols `=subinstr("`cols'", "_cons", "drop", 1)'
 	local cols `=subinstr("`cols'", "_cons", "tausq", 1)'
@@ -237,30 +237,36 @@ preserve
 	}
 	
 	// Holdout validation meta-regression
-	foreach n in newitems sameitems test {
-		`quietly' generate ll_`n' = ///
-			log(normalden(b_`n', delta_hat, sqrt(tausq + se_`n'^2)))
-		`quietly' summarize ll_`n'
-		return scalar dev_`n' = -2*r(sum)
+	`quietly' generate ll = ///
+		log(normalden(delta, delta_hat, sqrt(tausq + delta_se^2)))
+	foreach s in newitems sameitems evaluation {
+		`quietly' summarize ll if subset == "`s'"
+		return scalar dev_`s' = -2*r(sum)
 	}
 
-	// In-sample meta-regression (test data only)
-	`quietly' gsem (b_test <- c.se_test#c.M@1 `varlist'), variance(M@1)
+	// In-sample meta-regression (evaluation data only)
+	`quietly' gsem (delta <- c.delta_se#c.M@1 `varlist') ///
+		if subset == "evaluation", variance(M@1)
 	if (e(converged) == 0) local ++converge_fails
-	return scalar dev_intest = -2*e(ll)	
+	return scalar dev_ineval = -2*e(ll)	
 	
 	// LOO CV meta-regression
 	quietly generate ll_loo = .
-	forvalues i = 1/`I' {
-		`quietly' gsem (b_train <- c.se_train#c.M@1 `varlist') ///
-			if item != `i', variance(M@1)
+	quietly generate delta_hat_loo = .
+	`quietly' levels item if subset == "training", local(i_list)
+	foreach i of local i_list {
+		`quietly' gsem (delta <- c.delta_se#c.M@1 `varlist') ///
+			if item != `i' & subset == "training", variance(M@1)
 		if (e(converged) == 0) local ++converge_fails
-		predict delta_hat_temp, eta conditional(fixedonly)
+		quietly predict temp_delta_hat if item == `i' & ///
+			subset == "training", eta conditional(fixedonly)
+		quietly replace delta_hat_loo = temp_delta_hat ///
+			if item == `i' & subset == "training"
 		matrix E_loo = e(b)
 		local tau2 = el(E_loo, 1, colsof(E_loo))
-		`quietly' replace ll_loo = log(normalden(delta_hat_temp, b_train, ///
-			sqrt(`tau2' + se_train^2))) if item == `i'
-		drop delta_hat_temp
+		quietly replace ll_loo = log(normalden(delta_hat_loo, delta, ///
+			sqrt(`tau2' + delta_se^2))) if item == `i' & subset == "training"
+		drop temp_*
 	}
 	`quietly' summarize ll_loo
 	return scalar dev_loo = -2*r(sum)
@@ -285,7 +291,7 @@ replace Rsq = .3 if condition == 1
 replace Rsq = .9 if condition == 3
 generate double upsilon = sqrt(Rsq*Vsq)
 generate double tau = sqrt(Vsq - upsilon^2)
-generate double b = sqrt(upsilon^2 / 3)
+generate double b = sqrt(upsilon^2 / 4)
 generate nitems = 32
 replace nitems = 16 if condition == 4
 replace nitems = 64 if condition == 5
@@ -301,9 +307,9 @@ save conditions, replace
 clear
 
 // Define models (predictors)
-local m1 "x2-x3"
-local m2 "x2-x4"
-local m3 "x2-x5"
+local m1 "x2-x4"
+local m2 "x2-x4 c.x2#c.x3"
+local m3 "x2-x4 c.x2#c.x3 c.x2#c.x4"
 
 // Prepare to store results
 postfile memhold_sim double(     ///
@@ -318,14 +324,16 @@ postfile memhold_lltm double(    ///
 		condition                ///
 		model                    ///
 		converge_fails           ///
-		dev_intest     ///
-		dev_test       ///
+		dev_ineval     ///
+		dev_evaluation       ///
 		dev_sameitems  ///
 		dev_newitems   ///
 		sigmasq_se     ///
 		sigmasq_est    ///
 		beta1_se       ///
 		beta1_est      ///
+		beta6_se       ///
+		beta6_est      ///
 		beta5_se       ///
 		beta5_est      ///
 		beta4_se       ///
@@ -336,7 +344,7 @@ postfile memhold_lltm double(    ///
 		beta2_est      ///
 		bic            ///
 		aic            ///
-		dev_train      ///
+		dev_training      ///
 		rmse_full      ///
 		rmse_fix       ///
 	) using results_lltm_`s', replace
@@ -346,14 +354,16 @@ postfile memhold_twostage double(    ///
 		model                    ///
 		converge_fails           ///
 		dev_loo       ///
-		dev_intest    ///
-		dev_test      ///
+		dev_ineval    ///
+		dev_evaluation      ///
 		dev_sameitems ///
 		dev_newitems  ///
 		tausq_se      ///
 		tausq_est     ///
 		beta1_se      ///
 		beta1_est     ///
+		beta6_se       ///
+		beta6_est      ///
 		beta5_se      ///
 		beta5_est     ///
 		beta4_se      ///
@@ -364,7 +374,7 @@ postfile memhold_twostage double(    ///
 		beta2_est     ///
 		bic           ///
 		aic           ///
-		dev_train     ///
+		dev_training     ///
 		rmse_full     ///
 		rmse_fix      ///
 	) using results_twostage_`s', replace
@@ -400,14 +410,16 @@ forvalues i = 1/`=rowsof(SIM)' {
 			(`=el(SIM, `i', colnumb(SIM, "condition"))') ///
 			(`m') ///
 			(r(converge_fails)) ///
-			(r(dev_intest   ))  ///
-			(r(dev_test     ))  ///
+			(r(dev_ineval   ))  ///
+			(r(dev_evaluation     ))  ///
 			(r(dev_sameitems))  ///
 			(r(dev_newitems ))  ///
 			(r(sigmasq_se   ))  ///
 			(r(sigmasq_est  ))  ///
 			(r(beta1_se     ))  ///
 			(r(beta1_est    ))  ///
+			(r(beta6_se     ))  ///
+			(r(beta6_est    ))  ///
 			(r(beta5_se     ))  ///
 			(r(beta5_est    ))  ///
 			(r(beta4_se     ))  ///
@@ -418,7 +430,7 @@ forvalues i = 1/`=rowsof(SIM)' {
 			(r(beta2_est    ))  ///
 			(r(bic          ))  ///
 			(r(aic          ))  ///
-			(r(dev_train    ))  ///
+			(r(dev_training    ))  ///
 			(r(rmse_full)    )  ///
 			(r(rmse_fix)     )
 		timer off 2
@@ -431,14 +443,16 @@ forvalues i = 1/`=rowsof(SIM)' {
 			(`m') ///
 			(r(converge_fails)) ///
 			(r(dev_loo      ))  ///
-			(r(dev_intest   ))  ///
-			(r(dev_test     ))  ///
+			(r(dev_ineval   ))  ///
+			(r(dev_evaluation     ))  ///
 			(r(dev_sameitems))  ///
 			(r(dev_newitems ))  ///
 			(r(tausq_se     ))  ///
 			(r(tausq_est    ))  ///
 			(r(beta1_se     ))  ///
 			(r(beta1_est    ))  ///
+			(r(beta6_se     ))  ///
+			(r(beta6_est    ))  ///
 			(r(beta5_se     ))  ///
 			(r(beta5_est    ))  ///
 			(r(beta4_se     ))  ///
@@ -449,7 +463,7 @@ forvalues i = 1/`=rowsof(SIM)' {
 			(r(beta2_est    ))  ///
 			(r(bic          ))  ///
 			(r(aic          ))  ///
-			(r(dev_train    ))  ///
+			(r(dev_training    ))  ///
 			(r(rmse_full)    )  ///
 			(r(rmse_fix)     )
 		timer off 3
@@ -464,8 +478,3 @@ timer list
 postclose memhold_sim
 postclose memhold_twostage
 postclose memhold_lltm
-
-// Save an example dataset
-// clear
-// sim_dataset
-// save example, replace
