@@ -60,6 +60,22 @@ n_pars <- n_betas + 1
 variables_to_save <- c("conditions_df", "bad_seeds", "n_pars", "n_betas")
 
 
+# Adjust AIC for twostage method -----------------------------------------------
+
+aic_c <- function(dev, n_obs, n_pars) {
+  dev + 2*(n_pars+ 1) * n_obs / (n_obs - n_pars - 2)
+}
+
+aic_c_pick <- df$method == "twostage" & df$variable == "aic"
+# Remove standard penalty and add corrected one
+df_aic <- df[aic_c_pick,]
+aic_c_values <- aic_c(dev = df_aic$value - 2*n_pars[df_aic$model], 
+                      n_obs = df_aic$nitems, n_pars = n_pars[df_aic$model])
+df[aic_c_pick, "value"] <- aic_c_values
+
+variables_to_save <- c(variables_to_save, "aic_c")
+
+
 # LR tests: descriptive vs explanatory models ----------------------------------
 
 # Make dataframe of LLTM and LLTM-E deviances in training data
@@ -229,11 +245,15 @@ df_pen <- aggregate(p ~ .,
                     data = subset(df_pen, select = -c(seed, in_dev, out_dev)), 
                     mean)
 
-# Attach AIC to df
-df_aic <- subset(df_pen, type == "hv")
+# Attach AIC penalties to penalty df
+df_aic <- subset(df_pen, type == "hv" & method == "lltm")
 df_aic$type = "aic"
 df_aic$p <- (n_pars[df_aic$model]) * 2
-df_pen <- rbind(df_pen, df_aic)
+df_aic_c <- subset(df_pen, type == "hv" & method == "twostage")
+df_aic_c$type = "aic"
+df_aic_c$p <- with(df_aic_c, 2*(n_pars[model] + 1) * nitems / 
+                     (nitems - n_pars[model] - 2))
+df_pen <- rbind(df_pen, df_aic, df_aic_c)
 
 # Format df
 df_pen$group <- paste(df_pen$method, df_pen$type)
