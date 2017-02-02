@@ -20,28 +20,25 @@ parameters {
 model {
   vector[J] eta;
   eta = X*beta;
+  beta ~ normal(0, 2);
   sigma ~ exponential(.1);
   psi ~ exponential(.1);
   zeta ~ normal(0, psi);
   y ~ normal(eta[jj] + zeta[jj], sigma);
 }
 generated quantities {
-
-  vector[J] mll_j;
-  real mll;
   vector[J] eta;
-  eta = X*beta;  
-  
+  vector[I*J] cll_ij;
+  vector[J] mll_j;
+  eta = X*beta;
+  for(n in 1:I*J)
+    cll_ij[n] = normal_lpdf(y[n] | eta[jj[n]] + zeta[jj[n]], sigma);
   {
-
     matrix[I, I] Omega;
     Omega = rep_matrix(psi^2, I, I);
     for(i in 1:I)
       Omega[i,i] = psi^2 + sigma^2;
     for(j in 1:J)
       mll_j[j] = multi_normal_lpdf(y_vecs[j] | rep_vector(eta[j], I), Omega);
-    mll = sum(mll_j);
-
   }
-
 }

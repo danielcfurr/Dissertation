@@ -11,7 +11,7 @@ n_chains <- 4
 n_iter <- n_posterior / n_chains + n_warmup
 n_cores <- parallel::detectCores()
 
-opts_list <- ls()
+variables_to_save <- ls()
 
 set.seed(451680)
 
@@ -45,13 +45,12 @@ rim_simulate <- function(I = 20, J = 100, sigma = 1, psi = 1,
 
   if(!is.null(seed)) set.seed(seed)
 
-  return_list <- base_list <- list()
-  base_list$I <- I
-  base_list$J <- J
-  base_list$ii <- rep(1:I, each = J)
-  base_list$jj <- rep(1:J, times = I)
-  for(i in 1:3) return_list[[i]] <- base_list
-  names(return_list) <- paste0("stan_list_", 1:3)
+  # Start Stan data list
+  data_list <- list()
+  data_list$I <- I
+  data_list$J <- J
+  data_list$ii <- rep(1:I, each = J)
+  data_list$jj <- rep(1:J, times = I)
 
   # Get covariates
   X <- matrix(rnorm(J*3, mean = 0, sd = 1), ncol = 3, nrow = J)
@@ -66,23 +65,17 @@ rim_simulate <- function(I = 20, J = 100, sigma = 1, psi = 1,
 
   # Get response variables
   if(link == "logit") {
-    y <- rbinom(I*J, 1, boot::inv.logit(zeta[base_list$jj]))
+    y <- rbinom(I*J, 1, boot::inv.logit(zeta[data_list$jj]))
   } else {
-    y <- zeta[base_list$jj] + epsilon
+    y <- zeta[data_list$jj] + epsilon
   }
 
-  L <- 4:6
-  for(i in 1:3) {
-    return_list[[i]]$L <- L[i]
-    return_list[[i]]$X <- X[, 1:L[i]]
-    return_list[[i]]$y <- y
-  }
+  # Complete Stan data list
+  data_list$L <- ncol(X)
+  data_list$X <- X
+  data_list$y <- y
 
-  return_list[["df"]] <- as.data.frame(cbind(y = y,
-                                             cluster = base_list$jj,
-                                             X[base_list$jj, 2:4]))
-
-  return(return_list)
+  return(data_list)
 
 }
 
@@ -96,6 +89,8 @@ f_marginal <- function(node, r, iter, data_list, draws) {
   sigma <- draws$sigma[iter]
   sum(dnorm(y, mean = eta + node, sd = sigma, log = TRUE))
 }
+
+variables_to_save <- c(variables_to_save, "rim_simulate", "f_marginal")
 
 
 # Simulation -------------------------------------------------------------------
@@ -111,8 +106,7 @@ for(i in 1:length(sim_I)) {
 
   message(Sys.time(), " starting I = ", sim_I[i])
 
-  sim_list <- rim_simulate(sim_I[i], sim_J, sim_sigma, sim_psi, sim_beta)
-  data_list <- sim_list[[2]]
+  data_list <- rim_simulate(sim_I[i], sim_J, sim_sigma, sim_psi, sim_beta)
   fit <- sampling(compile, data_list, chains = n_chains, iter = n_iter,
                   warmup = n_warmup)
 
@@ -201,4 +195,6 @@ df$dif_nagq <- NA
 df$dif_nagq[2:nrow(df)] <- df$agq[2:nrow(df)] - df$agq[2:nrow(df) - 1]
 df$dif_nagq[df$nagq == min(sim_nodes)] <- NA
 
-save(df, df_combine, start, end, list = opts_list, file = "simulation.Rdata")
+variables_to_save <- c(variables_to_save, "df", "df_combine", "start", "end")
+
+save(list = variables_to_save, file = "simulation.Rdata")

@@ -7,10 +7,10 @@ n_cores <- 5
 n_agq_try <- round(7*1.5^(0:2))
 
 n_bs_r <- 500
-n_block_size_reps <- 10
+n_block_size_reps <- 5
+tsboot_sim <- "fixed"
 
 start <- Sys.time()
-
 
 variables_to_save <- ls()
 
@@ -30,76 +30,7 @@ rstan_options(auto_write = TRUE)
 options(mc.cores = n_cores)
 options(loo.cores = 1)
 
-source("../chapter_3/functions.R")
-
-# Wrappers for IC functions
-
-waic_wrapper <- function(ll) {
-  library(loo)
-  w <- waic(ll)
-  p_04 <- sum(w$pointwise[, "p_waic"] > .4)
-  return(c(unlist(w)[1:6], p_04 = p_04))
-}
-
-loo_wrapper <- function(ll, ...) {
-  library(loo)
-  l <- loo(ll, ...)
-  pk_05 <- sum(l$pareto_k > 0.5)
-  pk_10 <- sum(l$pareto_k > 1.0)
-  return(c(unlist(l)[1:6], pk_05 = pk_05, pk_10 = pk_10))
-}
-
-# Likelihood functions
-
-f_conditional_ij <- function(iter, data_list, draws) {
-  theta_vec <- draws$theta[iter, data_list$jj]
-  delta_vec <- draws$delta[iter, data_list$ii]
-  p <- boot::inv.logit(theta_vec - delta_vec)
-  dbinom(data_list$y, 1, p, log = TRUE)
-}
-
-f_conditional_j <- function(iter, data_list, draws) {
-  theta_vec <- draws$theta[iter, data_list$jj]
-  delta_vec <- draws$delta[iter, data_list$ii]
-  p <- boot::inv.logit(theta_vec - delta_vec)
-  ll_ij <- dbinom(data_list$y, 1, p, log = TRUE)
-  ll_j <- tapply(ll_ij, data_list$jj, sum)
-  return(ll_j)
-}
-
-f_marginal_j <- function(node, r, iter, data_list, draws) {
-  y <- data_list$y[data_list$jj == r]
-  theta_fix <- draws$theta_fix[iter, r]
-  delta <- draws$delta[iter, data_list$ii[data_list$jj == r]]
-  p <- boot::inv.logit(theta_fix + node - delta)
-  sum(dbinom(y, 1, p, log = TRUE))
-}
-
-# DIC wrappers that are compatible with tsboot, which requires the data as a
-# matrix
-
-dic_cond_ij_wrapper <- function(mat, data_list) {
-  ll <- mat[, grepl("^loglik\\[.*]$", colnames(mat))]
-  draws <- list()
-  draws$theta <- mat[, grepl("^theta\\[.*]$", colnames(mat))]
-  draws$delta <- mat[, grepl("^delta\\[.*]$", colnames(mat))]
-  best_ll <- cll(data_list = data_list, CFUN = f_conditional_ij, draws = draws,
-                 best_only = TRUE)
-  dic(list(ll = ll, best_ll = best_ll))
-}
-
-dic_marg_wrapper <- function(mat, data_list) {
-  ll <- mat[, grepl("^loglik\\[.*]$", colnames(mat))]
-  draws <- list()
-  draws$theta_fix <- mat[, grepl("^theta\\_fix\\[.*]$", colnames(mat))]
-  draws$zeta <- mat[, grepl("^zeta\\[.*]$", colnames(mat))]
-  draws$sigma <- mat[, "sigma"]
-  draws$delta <- mat[, grepl("^delta\\[.*]$", colnames(mat))]
-  draws$lp__ <- mat[, "lp__"]
-  best_ll <- mll_serial(draws, dl, f_marginal_j, "zeta", "sigma", n_agq,
-                        best_only = TRUE)
-  dic(list(ll = ll, best_ll = best_ll))
-}
+source("../functions.R")
 
 
 # Set up data and models -------------------------------------------------------
@@ -149,7 +80,10 @@ variables_to_save <- c(variables_to_save, "agq_try", "n_agq")
 
 # Choose block sizes to test
 block_size <- round((n_posterior)^(1/3))
-block_sizes <- c(block_size, block_size - 5, block_size + 5)
+# block_sizes <- c(block_size, block_size - 5, block_size + 5)
+# block_sizes <- round(block_size*c(1/2, 1, 2))
+block_sizes <- c(1, block_size, 50, 100, 200)
+
 
 # Get conditional liklihood
 ll_cond_ij <- cll(fit, dl, f_conditional_ij)
@@ -174,7 +108,7 @@ for(r in 1:n_block_size_reps) {
     i <- i + 1
     message(Sys.time(), ": r=", r, " b=", b, " i=", i)
     bs <- tsboot(ll_cond_ij$ll, statistic = waic_wrapper, l = block_sizes[b],
-                 R = n_bs_r, sim = "fixed", parallel = "snow", ncpus = n_cores)
+                 R = n_bs_r, sim = tsboot_sim, parallel = "snow", ncpus = n_cores)
     mcerrors <- apply(bs$t, 2, sd)
     waic_cond_mcerror[i, ] <- c(block_sizes[b], mcerrors)
   }
@@ -188,7 +122,7 @@ for(r in 1:n_block_size_reps) {
     i <- i + 1
     message(Sys.time(), ": r=", r, " b=", b, " i=", i)
     bs <- tsboot(ll_marg_j$ll, statistic = waic_wrapper, l = block_sizes[b],
-                 R = n_bs_r, sim = "fixed", parallel = "snow", ncpus = n_cores)
+                 R = n_bs_r, sim = tsboot_sim, parallel = "snow", ncpus = n_cores)
     mcerrors <- apply(bs$t, 2, sd)
     waic_marg_mcerror[i, ] <- c(block_sizes[b], mcerrors)
   }
@@ -218,7 +152,7 @@ for(r in 1:n_block_size_reps) {
     clusterExport(cl, c("dic", "cll", "f_conditional_ij",
                         "better_posterior_means"))
     bs <- tsboot(mat, statistic = dic_cond_ij_wrapper, l = block_sizes[b],
-                 R = n_bs_r, sim = "fixed", data_list = dl,
+                 R = n_bs_r, sim = tsboot_sim, data_list = dl,
                  cl = cl, parallel = "snow", ncpus = n_cores)
     stopCluster(cl)
     mcerrors <- apply(bs$t, 2, sd)
@@ -250,7 +184,7 @@ for(r in 1:n_block_size_reps) {
     clusterExport(cl, c("dic", "mll_serial", "f_marginal_j",
                         "better_posterior_means", "n_agq", "dl"))
     bs <- tsboot(mat, statistic = dic_marg_wrapper, l = block_sizes[b],
-                 R = n_bs_r, sim = "fixed", data_list = dl,
+                 R = n_bs_r, sim = tsboot_sim, data_list = dl,
                  cl = cl, parallel = "snow", ncpus = n_cores)
     stopCluster(cl)
     mcerrors <- apply(bs$t, 2, sd)
@@ -265,7 +199,8 @@ df_mcerror <- as.data.frame(
 df_mcerror$focus <- rep(c("Conditional", "Marginal"),
                         each = nrow(dic_cond_mcerror))
 
-variables_to_save <- c(variables_to_save, "df_mcerror")
+variables_to_save <- c(variables_to_save, "df_mcerror", "block_size",
+                       "block_sizes")
 
 
 # Fit the models and get conditional/marginal IC with bootstrapping ------------
@@ -303,7 +238,7 @@ for(m in 1:length(model_list)) {
   clusterExport(cl, c("dic", "cll", "f_conditional_ij",
                       "better_posterior_means"))
   bs <- tsboot(mat, statistic = dic_cond_ij_wrapper, l = block_size,
-               R = n_bs_r, sim = "fixed", data_list = dl,
+               R = n_bs_r, sim = tsboot_sim, data_list = dl,
                cl = cl, parallel = "snow", ncpus = n_cores)
   stopCluster(cl)
   mcerrors <- apply(bs$t, 2, sd)
@@ -313,7 +248,7 @@ for(m in 1:length(model_list)) {
   # Conditional WAIC
   waic_hold <- waic_wrapper(ll_cond_ij$ll)
   bs <- tsboot(ll_cond_ij$ll, statistic = waic_wrapper, l = block_size,
-               R = n_bs_r, sim = "fixed", parallel = "snow", ncpus = n_cores)
+               R = n_bs_r, sim = tsboot_sim, parallel = "snow", ncpus = n_cores)
   mcerrors <- apply(bs$t, 2, sd)
   names(mcerrors) <- paste0(names(waic_hold), "_mcerror")
   cond_waic[[m]] <- c(waic_hold, mcerrors)
@@ -340,7 +275,7 @@ for(m in 1:length(model_list)) {
   clusterExport(cl, c("dic", "mll_serial", "f_marginal_j",
                       "better_posterior_means", "n_agq", "dl"))
   bs <- tsboot(mat, statistic = dic_marg_wrapper, l = block_size,
-               R = n_bs_r, sim = "fixed", data_list = dl,
+               R = n_bs_r, sim = tsboot_sim, data_list = dl,
                cl = cl, parallel = "snow", ncpus = n_cores)
   stopCluster(cl)
   mcerrors <- apply(bs$t, 2, sd)
@@ -350,7 +285,7 @@ for(m in 1:length(model_list)) {
   # Marginal WAIC
   waic_hold <- waic_wrapper(ll_marg$ll)
   bs <- tsboot(ll_marg$ll, statistic = waic_wrapper, l = block_size,
-               R = n_bs_r, sim = "fixed", parallel = "snow", ncpus = n_cores)
+               R = n_bs_r, sim = tsboot_sim, parallel = "snow", ncpus = n_cores)
   mcerrors <- apply(bs$t, 2, sd)
   names(mcerrors) <- paste0(names(waic_hold), "_mcerror")
   marg_waic[[m]] <- c(waic_hold, mcerrors)

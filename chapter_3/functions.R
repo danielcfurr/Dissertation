@@ -198,16 +198,72 @@ mll_serial <- function(draws, data_list, MFUN, resid_name, sd_name, n_nodes,
 
 }
 
+
+# Wrappers for IC functions
+
 waic_wrapper <- function(ll) {
+  library(loo)
   w <- waic(ll)
   p_04 <- sum(w$pointwise[, "p_waic"] > .4)
   return(c(unlist(w)[1:6], p_04 = p_04))
 }
 
-loo_wrapper <- function(ll) {
-  l <- loo(ll)
+loo_wrapper <- function(ll, ...) {
+  library(loo)
+  l <- loo(ll, ...)
   pk_05 <- sum(l$pareto_k > 0.5)
   pk_10 <- sum(l$pareto_k > 1.0)
   return(c(unlist(l)[1:6], pk_05 = pk_05, pk_10 = pk_10))
 }
 
+# Likelihood functions
+
+f_conditional_ij <- function(iter, data_list, draws) {
+  theta_vec <- draws$theta[iter, data_list$jj]
+  delta_vec <- draws$delta[iter, data_list$ii]
+  p <- boot::inv.logit(theta_vec - delta_vec)
+  dbinom(data_list$y, 1, p, log = TRUE)
+}
+
+f_conditional_j <- function(iter, data_list, draws) {
+  theta_vec <- draws$theta[iter, data_list$jj]
+  delta_vec <- draws$delta[iter, data_list$ii]
+  p <- boot::inv.logit(theta_vec - delta_vec)
+  ll_ij <- dbinom(data_list$y, 1, p, log = TRUE)
+  ll_j <- tapply(ll_ij, data_list$jj, sum)
+  return(ll_j)
+}
+
+f_marginal_j <- function(node, r, iter, data_list, draws) {
+  y <- data_list$y[data_list$jj == r]
+  theta_fix <- draws$theta_fix[iter, r]
+  delta <- draws$delta[iter, data_list$ii[data_list$jj == r]]
+  p <- boot::inv.logit(theta_fix + node - delta)
+  sum(dbinom(y, 1, p, log = TRUE))
+}
+
+# DIC wrappers that are compatible with tsboot, which requires the data as a
+# matrix
+
+dic_cond_ij_wrapper <- function(mat, data_list) {
+  ll <- mat[, grepl("^loglik\\[.*]$", colnames(mat))]
+  draws <- list()
+  draws$theta <- mat[, grepl("^theta\\[.*]$", colnames(mat))]
+  draws$delta <- mat[, grepl("^delta\\[.*]$", colnames(mat))]
+  best_ll <- cll(data_list = data_list, CFUN = f_conditional_ij, draws = draws,
+                 best_only = TRUE)
+  dic(list(ll = ll, best_ll = best_ll))
+}
+
+dic_marg_wrapper <- function(mat, data_list) {
+  ll <- mat[, grepl("^loglik\\[.*]$", colnames(mat))]
+  draws <- list()
+  draws$theta_fix <- mat[, grepl("^theta\\_fix\\[.*]$", colnames(mat))]
+  draws$zeta <- mat[, grepl("^zeta\\[.*]$", colnames(mat))]
+  draws$sigma <- mat[, "sigma"]
+  draws$delta <- mat[, grepl("^delta\\[.*]$", colnames(mat))]
+  draws$lp__ <- mat[, "lp__"]
+  best_ll <- mll_serial(draws, dl, f_marginal_j, "zeta", "sigma", n_agq,
+                        best_only = TRUE)
+  dic(list(ll = ll, best_ll = best_ll))
+}
