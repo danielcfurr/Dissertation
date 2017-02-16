@@ -1,8 +1,6 @@
 sim_bs_r <- 500
-sim_bs_l <- 1:100
+sim_bs_l <- rep(1:100, times = 2)
 sim_bs_I <- 25
-
-brute_force_reps <- 100
 
 variables_to_save <- ls()
 
@@ -23,45 +21,70 @@ library(mvtnorm)
 library(reshape2)
 library(boot)
 
-options(loo.cores = n_cores)
+options(loo.cores = 1)
 options(mc.cores = n_cores)
 
 compile <- stan_model(file = "rim_mvn.stan")
 
 data_list <- rim_simulate(sim_bs_I, sim_J, sim_sigma, sim_psi, sim_beta)
 
+waic_wrapper <- function(ll) {
+  w <- waic(ll)
+  c(lpd_waic = w$elpd_waic + w$p_waic, p_waic = w$p_waic,
+    elpd_waic = w$elpd_waic, waic = w$waic)
+}
+
+
 # Simulation on bootstrap ------------------------------------------------------
 
-waic_marg_list <- waic_cond_list <- list()
+waic_marg_list <- waic_cond_list <- vector("list", length(sim_bs_l))
+nonconverge <- list()
 
 sim_bs_start <- Sys.time()
 for(i in 1:length(sim_bs_l)) {
 
   message(Sys.time(), " block sizes; i = ", i, ", l = ", sim_bs_l[i])
 
-  fit <- sampling(compile, data_list, chains = n_chains, iter = n_iter,
-                  warmup = n_warmup)
-  post_draws <- extract(fit)
+  retry <- TRUE
+  while(retry) {
+    fit <- sampling(compile, data_list, chains = n_chains, iter = n_iter,
+                    warmup = n_warmup)
+    sum_mat <- summary(fit, pars = monitor_pars, probs = NA)[["summary"]]
+    bad_rhats <- sum_mat[, "Rhat"] > 1.1
+    if(sum(bad_rhats) > 0) {
+      nonconverge[[length(nonconverge) + 1]] <- row.names(sum_mat)[bad_rhats]
+    } else {
+      retry <- FALSE
+    }
+  }
 
-  # Marginal WAIC
+  post_draws <- extract(fit)
+  m <- summary(fit, pars = "mll_j", probs = NA)
+  hist(m$summary[,"Rhat"])
+  m <- summary(fit, pars = "cll_ij", probs = NA)
+  hist(m$summary[,"Rhat"])
+
+  # Marginal WAIC. bs$t0 is result for full data. mcerror is boostrap MC error.
   cl <- makeCluster(n_cores, type='PSOCK')
+  clusterExport(cl, "waic")
   bs <- tsboot(post_draws$mll_j, statistic = waic_wrapper, l = sim_bs_l[i],
                R = sim_bs_r, sim = "fixed", endcorr = TRUE,
                cl = cl, parallel = "snow", ncpus = n_cores)
   stopCluster(cl)
-  mcerror <- apply(bs$t[,1:3], 2, sd)
-  names(mcerror) <- paste0("mce.", names(bs$t0[1:3]))
-  waic_marg_list[[i]] = c(l = sim_bs_l[i], bs$t0[1:3], mcerror)
+  mcerror <- apply(bs$t, 2, sd)
+  names(mcerror) <- paste0("mce_", names(bs$t0))
+  waic_marg_list[[i]] = c(l = sim_bs_l[i], bs$t0, mcerror)
 
   # Conditional WAIC
   cl <- makeCluster(n_cores, type='PSOCK')
+  clusterExport(cl, "waic")
   bs <- tsboot(post_draws$cll_ij, statistic = waic_wrapper, l = sim_bs_l[i],
                R = sim_bs_r, sim = "fixed", endcorr = TRUE,
                cl = cl, parallel = "snow", ncpus = n_cores)
   stopCluster(cl)
-  mcerror <- apply(bs$t[,1:3], 2, sd)
-  names(mcerror) <- paste0("mce.", names(bs$t0[1:3]))
-  waic_cond_list[[i]] = c(l = sim_bs_l[i], bs$t0[1:3], mcerror)
+  mcerror <- apply(bs$t, 2, sd)
+  names(mcerror) <- paste0("mce_", names(bs$t0))
+  waic_cond_list[[i]] = c(l = sim_bs_l[i], bs$t0, mcerror)
 
   # Marginal DIC
 #   post_means <- get_posterior_mean(fit)[, "mean-all chains"]
@@ -110,78 +133,37 @@ df_waic_cond <- data.frame(do.call(rbind, waic_cond_list),
 df_bootstrap <- rbind(df_waic_marg, df_waic_cond)
 
 variables_to_save <- c(variables_to_save, "sim_bs_start", "sim_bs_end",
-                        "df_bootstrap")
-
-
-# Brute force approximation for mc error ---------------------------------------
-
-brute_force_waic_marg_list <- brute_force_waic_cond_list <- list()
-
-brute_force_start <- Sys.time()
-for(i in 1:brute_force_reps) {
-
-  message(Sys.time(), " brute force; i = ", i)
-
-  fit <- sampling(compile, data_list, chains = n_chains, iter = n_iter,
-                  warmup = n_warmup)
-  post_draws <- extract(fit, pars = c("mll_j", "cll_ij"))
-
-  brute_force_waic_marg_list[[i]] <- waic_wrapper(post_draws$mll_j)[1:3]
-  brute_force_waic_cond_list[[i]] <- waic_wrapper(post_draws$cll_ij)[1:3]
-
-}
-
-brute_force_end <- Sys.time()
-brute_force_end - brute_force_start
-
-df_waic_marg <- data.frame(do.call(rbind, brute_force_waic_marg_list),
-                           focus = "Marginal", IC = "WAIC")
-df_waic_cond <- data.frame(do.call(rbind, brute_force_waic_cond_list),
-                           focus = "Conditional", IC = "WAIC")
-df_brute_force <- rbind(df_waic_marg, df_waic_cond)
-
-variables_to_save <- c(variables_to_save, "brute_force_start",
-                        "brute_force_end", "df_brute_force")
+                       "nonconverge", "df_bootstrap")
 
 save(list = variables_to_save, file = "bootstrap.Rdata")
 
 
 #
 
-df_brute_force$i <- 1:nrow(df_brute_force)
-df_brute_force_long <- melt(df_brute_force, id.vars = c("focus", "IC", "i"))
-p_brute_marg <- ggplot(subset(df_brute_force_long, focus == "Marginal")) +
+est_names <- c("lpd_waic", "p_waic", "waic")
+mce_names <- paste0("mce_", est_names)
+
+# Brute force results histograms
+df_bootstrap$i <- 1:nrow(df_bootstrap)
+df_bootstrap_long <- melt(df_bootstrap, id.vars = c("focus", "IC", "l", "i"))
+ggplot(subset(df_bootstrap_long, variable %in% est_names)) +
   aes(x = value) +
   geom_histogram(bins = 10) +
-  facet_wrap(~focus + variable, scales = "free_x")
-p_brute_cond <- p_brute_marg %+% subset(df_brute_force_long,
-                                        focus == "Conditional")
-p_brute_marg
-p_brute_cond
+  facet_wrap(~focus + variable, nrow = 2, scales = "free_x") #+
+  #my_theme
 
-df_bootstrap_long <- melt(df_bootstrap, id.vars = c("focus", "IC", "l"))
-p_boot_marg <- ggplot(subset(df_bootstrap_long, focus == "Marginal")) +
-  aes(x = l, y = value) +
-  geom_point() +
-  geom_smooth() +
-  facet_wrap(~focus + variable, scales = "free_y")
-p_boot_cond <- p_boot_marg %+% subset(df_bootstrap_long, focus == "Conditional")
-p_boot_marg
-p_boot_cond
-
-df_brute_force_mce <- dcast(df_brute_force_long, focus + IC + variable ~ .,
-                            fun.aggregate = sd, value.var = "value")
-names(df_brute_force_mce)[names(df_brute_force_mce) == "."] <- "brute_force"
-df_brute_force_mce$variable <- paste0("mce.", df_brute_force_mce$variable)
-df_combine <- merge(df_bootstrap_long, df_brute_force_mce)
-p_comb_marg <- ggplot(subset(df_combine, focus == "Marginal")) +
-  aes(x = l, y = value) +
+# Boostrap results with brute force sd for comparison
+df_brute_force <- aggregate(value ~ focus + IC + variable,
+                            subset(df_bootstrap_long, variable %in% est_names),
+                            FUN = sd)
+names(df_brute_force)[names(df_brute_force) == "value"] <- "brute_force"
+df_bs_mcerror <- subset(df_bootstrap_long, variable %in% mce_names)
+df_bs_mcerror$variable <- sub("mce_", "", df_bs_mcerror$variable)
+names(df_bs_mcerror)[names(df_bs_mcerror) == "value"] <- "bootstrap"
+df_combine <- merge(df_bs_mcerror, df_brute_force)
+ggplot(df_combine) +
+  aes(x = l, y = bootstrap) +
   geom_hline(aes(yintercept = brute_force), linetype = "dashed") +
   geom_point() +
-  geom_smooth() +
+  geom_smooth(method = "loess", se = FALSE) +
   facet_wrap(~focus + variable, scales = "free_y")
-p_boot_cond <- p_comb_marg %+% subset(df_combine, focus == "Conditional")
-p_comb_marg
-p_boot_cond
-
-

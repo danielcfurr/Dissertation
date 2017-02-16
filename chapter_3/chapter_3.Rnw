@@ -67,15 +67,16 @@ startup_vars <- ls()
 
 \section{Introduction}
 
-Obtaining predictions for new data requires consideration of how new observations would arise.
+Model comparison using indices motivated by cross-validation requires consideration of how new observations would arise.
 For the case of independent observations, new observations come about in a straightforward way, that being simply a new collection of exchangeable units.
 For the case of clustered observations, new observations may come from within the existing clusters or instead from within new clusters.
-\textcite{spiegelhalter2002bayesian} described this distinction as the focus of the model. A model may be focused on the direct parameters associated with clusters, such as cluster-specific means. These may be conceived of as latent variables. Focus on the direct parameters implies that a new data collection would entail a new sample of units from the existing set of clusters.
+\textcite{spiegelhalter2002bayesian} described this distinction as the focus of the model. A model may be focused on the direct parameters associated with clusters, often referred to as latent variables.
+Focus on the direct parameters implies that a new data collection would entail a new sample of units from the existing set of clusters.
 Alternatively, the focus of the model may be the hyperparameters for the distribution of the direct parameters. In this case, the implied new data collection involves a new sample of clusters, which of course also provide previously unobserved units.
 
-A researcher may be interested in obtaining estimates of the out-of-sample prediction accuracy, either to assess a single model or to compare several models. The deviance information criterion \parencite[DIC;][]{spiegelhalter2002bayesian}, widely applicable information criterion \parencite[WAIC;][]{watanabe2010asymptotic}, and Pareto-smoothed importance sampling estimates of leave-one-out cross-validation \parencite[PSIS-LOO;][]{vehtari2016pareto} are methods of obtaining such estimates. Each of these depend on posterior draws of the likelihood obtained from Markov chain Monte Carlo (MCMC) simulation. The usual way of specifying Bayesian models in programs like BUGS, JAGS, or Stan bases the likelihood on the direct parameters, and so the ``default'' implementation of information criteria results in an inference with the focus being on the direct paramters. As such, the estimates of predictive accuracy are for predictions for new units arising from the existing set of clusters.
+A researcher may be interested in obtaining estimates of the out-of-sample prediction accuracy, either to assess a single model or to compare several models. The deviance information criterion \parencite[DIC;][]{spiegelhalter2002bayesian}, widely applicable information criterion \parencite[WAIC;][]{watanabe2010asymptotic}, and Pareto-smoothed importance sampling estimates of leave-one-out cross-validation \parencite[PSIS-LOO;][]{vehtari2016pareto} are methods of obtaining such estimates. Each of these depend on posterior draws of the likelihood obtained from Markov chain Monte Carlo (MCMC) simulation. The usual way of specifying Bayesian models in programs like BUGS, JAGS, or Stan bases the likelihood on the direct parameters, and so the ``default'' implementation of information criteria results in an inference with the focus being on the direct parameters. As such, the estimates of predictive accuracy are for predictions for new units arising from the existing set of clusters.
 
-For assessing predictive accuracy with a focus on the hyperparameters, or in other words for predictions involving a new sample of clusters, it is necessary to obtain cluster-level likelihoods that marginalize out the direct parameters. Such likelihoods are common in the frequentist tradition; generalized structural equation models and generalized linear mixed models are often fit using marginal maximum likelihood estimation, for example. In this chapter, I advocate for obtaining posterior draws of marginal likelihoods after the usual MCMC simulation for use with DIC, WAIC, or PSIS-LOO when a prediction inference involving new clusters in needed.
+For assessing predictive accuracy with a focus on the hyperparameters, or in other words for predictions involving a new sample of clusters, it is necessary to obtain cluster-level likelihoods that are marginal over the direct parameters. Such likelihoods are common in the frequentist tradition; generalized structural equation models and generalized linear mixed models are often fit using marginal maximum likelihood estimation, for example. In this chapter, I advocate for obtaining posterior draws of marginal likelihoods after the usual MCMC simulation for use with DIC, WAIC, or PSIS-LOO when a prediction inference involving new clusters in needed.
 
 
 \section{A simple hierarchical Bayesian model}
@@ -83,16 +84,15 @@ For assessing predictive accuracy with a focus on the hyperparameters, or in oth
 The posterior for a simple hierarchical Bayesian model is
 \begin{equation}
   p(\omega, \psi, \zeta | y) \propto
-  \left[
     \prod_{j=1}^J \prod_{i=1}^I p(y_{ij} | \omega, \zeta_j)
-  \right]
-  p(\zeta_j | \psi) p(\omega, \psi)
+    \prod_{j=1}^J p(\zeta_j | \psi)
+  p(\omega, \psi)
 ,\end{equation}
-where $y_{ij} \in y$ is the response for observation $i$ ($i = 1 \ldots I$) in cluster $j$ ($j = 1 \dots J$), $\omega$ is a vector of parameters common across clusters, $\zeta_j$ is a cluster-specific parameter, and $\psi$ is a hyperparameter for the prior distribution of $\zeta_j$. Further, let $\zeta$ represent the vector containing each $\zeta_j$. The likelihood $p(y_{ij} | \omega, \zeta_j)$ is some function of the data that does not directly involve $\psi$. The joint prior $p(\zeta_j | \psi) p(\omega, \psi)$ is split into the hierarchical prior for $\zeta_j$ and the joint prior for $\omega$ and $\psi$, which may be rewritten as $p(\omega) p(\psi)$ if independent priors are assigned.
+where $y_{ij} \in y$ is the response for observation $i$ ($i = 1 \ldots I$) in cluster $j$ ($j = 1 \dots J$), $\omega$ is a vector of parameters common across clusters, $\zeta_j$ is a cluster-specific parameter, and $\psi$ is a hyperparameter for the prior distribution of $\zeta_j$. Further, let $\zeta$ represent the vector containing all $\zeta_j$. The likelihood $p(y_{ij} | \omega, \zeta_j)$ is on $\zeta_j$ and therefore does not directly involve $\psi$. The prior distributions included the hierarchical prior for $\zeta$ and the joint prior for $\omega$ and $\psi$, which may be rewritten as $p(\omega) p(\psi)$ if independent priors are assigned.
 
 For a focus on $\{ \omega, \psi \}$, a marginal, cluster-level likelihood may be obtained in order to make predictive inferences regarding data from new clusters. Otherwise, for a focus on $\{ \omega, \zeta \}$, the usual unit-level likelihood may be used for prediction inferences for new data from the original clusters. I will refer to this likelihood as the ``conditional'' likelihood as it conditions on $\zeta$.
 
-Any hierarchical prior distribution may be assumed for $\zeta_j$, and depending on the type of distribution, $\psi$ may be a vector representing multiple parameters associated with the chosen distribution. Further, $\zeta_j$ may be a vector of several cluster-specific parameters. However, the proposed adaptive quadrature method requires a scalar $\zeta_j$ having a normal prior, $\zeta_j \sim \mathrm{N}(0, \psi^2)$, where $\psi$ is a standard deviation. Here, $\zeta_j$ may be thought of as a residual, and then $\omega$ accounts for the mean structure while $\psi$ accounts for the standard deviation of the residuals. As an aside, the proposed adaptive quadrature method could be generalized to a multivariate normal distribution to accommodate $\zeta_j$ being a vector.
+Any hierarchical prior distribution may be assumed for $\zeta_j$, and depending on the type of distribution, $\psi$ may be a vector representing multiple parameters associated with the chosen distribution. Further, $\zeta_j$ may be a vector of several cluster-specific parameters. However, the proposed adaptive quadrature method requires a scalar $\zeta_j$ having a normal prior, $\zeta_j \sim \mathrm{N}(0, \psi^2)$, where $\psi$ is a standard deviation. Here, $\zeta_j$ may be thought of as a residual, and then $\omega$ accounts for the mean structure of $y$ while $\psi$ accounts for the standard deviation of the residuals. As an aside, the proposed adaptive quadrature method could be generalized to a multivariate normal distribution to accommodate $\zeta_j$ being a vector.
 
 
 \section{Information criteria for hierarchical Bayesian models}
@@ -107,7 +107,7 @@ The notation that follows is equivalent to that of \textcite{vehtari2016practica
 
 \subsection{Conditional forms of out-of-sample predictive accuracy}
 
-\subsubsection{Target quantity}
+\subsubsection{Target quantity for the conditional case}
 
 Inference regarding predictive performance of the model for new data relies on the posterior predictive distribution \parencite{rubin1984bayesianly, marshall2007identifying}. The posterior predictive distribution for a new observation $\tilde y_{i'j}$ is
 \begin{equation}
@@ -137,51 +137,47 @@ The $c$ subscript in $\mathrm{elpd}_c$ denotes that it is based on the condition
 Information criteria and cross-validation are means of estimating the expected log pointwise predictive density.
 \textcite{vehtari2016practical} do not include the $c$ subscripts on $\mathrm{elpd}_c$ or the other quantities that follow in this section.
 
-A related quantity is log pointwise predictive density, which is
+
+\subsubsection{Conditional deviance information criteria}
+
+Information criteria estimate the $\mathrm{elpd}_c$ using a single dataset. DIC requires both the mean of the log likelihood taken over the posterior and the log likelihood evaluated at the posterior mean. The mean of the log likelihood is
 \begin{equation}
-  \mathrm{lpd}_c =
+  \mathrm{lpd}_{\mathrm{DIC},c} =
   \sum_{j=1}^J \sum_{i=1}^I
-  \log \iiint
+  \iiint \log
     p(y_{ij} | \omega, \zeta_j)
     p(\zeta_j | \psi, y)
     p(\omega, \psi | y)
   ~\mathrm{d}\omega \mathrm{d}\psi \mathrm{d}\zeta_j
-.\end{equation}
-The $\mathrm{lpd}_c$ is the full data log-likelihood integrated over the joint posterior for all parameters.
-An estimate for it is obtained (with a degree of Monte Carlo error) from the draws of MCMC simulation as
+,\end{equation}
+which is estimated in MCMC simulation as
 \begin{equation}
-  \widehat{\mathrm{lpd}}_c =
-  \sum_{j=1}^J \sum_{i=1}^I \log
+  \widehat{\mathrm{lpd}}_{\mathrm{DIC},c} =
+  \sum_{j=1}^J \sum_{i=1}^I
   \left (
-    \frac{1}{S} \sum_{s=1}^S p(y_{ij} | \omega^s, \zeta_j^s)
+    \frac{1}{S} \log \sum_{s=1}^S p(y_{ij} | \omega^s, \zeta_j^s)
   \right )
 ,\end{equation}
 where $\omega^s$ and $\zeta_j^s$ represent parameter values at posterior draw $s$, $s = 1 \cdots S$.
-Using $\widehat \mathrm{lpd}_c$ to evaluate predictive performance will overstate the accuracy because the same data are used to fit the model and evaluate the predictions. Information criteria typically apply a penalty to $\widehat \mathrm{lpd}_c$ related to the ``effective number of parameters.''
-
-
-\subsubsection{Deviance information criteria}
-
-Information criteria estimate the $\mathrm{elpd}_c$ using a single dataset, and these come in many forms.
-The DIC
-%deviance information criterion \parencite[DIC;][]{spiegelhalter2002bayesian}
-requires evaluating the log pointwise predictive density at the posterior means of the parameters, which is
-\begin{equation} \label{eq:2-best-lpdc}
-  \widehat{\mathrm{lpd}}_c^* =
+The log likelihood evaluated at the posterior mean is estimated as
+\begin{equation} \label{eq:3-best-lpdc}
+  \widehat{\mathrm{lpd}}_{\mathrm{DIC},c}^* =
     \sum_{j=1}^J \sum_{i=1}^I
     \log p(y_{ij} | \bar \omega, \bar \zeta_j)
 ,\end{equation}
-where $\bar \omega$ and $\bar \zeta_j$ refer to the posterior means for their respective parameters.
+where $\bar \omega$ and $\bar \zeta_j$ refer to the estimated posterior means.
 The estimated effective number of parameters for DIC is
 \begin{equation}
   \hat p_{\mathrm{DIC},c} =
-  2\widehat{\mathrm{lpd}}_c^* - 2\widehat{\mathrm{lpd}_c}
+  2 (\widehat{\mathrm{lpd}}_{\mathrm{DIC},c}^* -
+    \widehat{\mathrm{lpd}}_{\mathrm{DIC},c})
 \end{equation}
 and the approximation for the expected log pointwise predictive density is
-\begin{equation}
-  \widehat{\mathrm{elpd}}_{\mathrm{DIC}, c} =
-  \widehat{\mathrm{lpd}}_c^* - \hat p_{\mathrm{DIC},c}
-.\end{equation}
+\begin{align}
+  \widehat{\mathrm{elpd}}_{\mathrm{DIC}, c}
+  & = \widehat{\mathrm{lpd}}_{\mathrm{DIC},c}^* - \hat p_{\mathrm{DIC},c} \\
+  & = \widehat{\mathrm{lpd}}_{\mathrm{DIC},c} - \frac{1}{2}\hat p_{\mathrm{DIC},c}
+.\end{align}
 \textcite[][p. 1002]{gelman2014understanding} provide the two preceding formulas as well as an alternative for $\hat p_{c,\mathrm{DIC}}$ based on the variance of $p(y_{ij} | \omega^s, \zeta_j^s)$, which is not used here.
 The value reported for DIC is usually on the deviance scale:
 \begin{equation}
@@ -191,16 +187,35 @@ The value reported for DIC is usually on the deviance scale:
 This conditional DIC corresponds to the $\mathrm{DIC}_7$ of \textcite{celeux2006deviance}.
 
 This reliance on point estimates in calculating $\widehat{\mathrm{lpd}}_c^*$ results in DIC not being invariant to reparameterization \parencite[][p. 4]{spiegelhalter2014deviance}.
+For example, results for DIC will differ depending on whether a parameter like $\psi$ represents a standard deviation or a variance.
 %Perhaps more fundamentally, \textcite{gelman2014understanding} argue that the use of point estimates makes DIC not fully Bayesian.
 The use of DIC requires that the data may be separated into conditionally independent units and that $\hat p_{\mathrm{DIC},c}$ should be much less than the number of units \parencite[][p. 535]{plummer2008penalized}. Further, owing to the reliance on point estimates, the posterior distribution must be reasonably summarized by its mean \parencite[][p. 1015]{gelman2014understanding}.
-The purpose of DIC is to optimize predictions rather than identify a true model \parencite[][p. 4]{spiegelhalter2014deviance}.% , and in this way is analogous to AIC rather than BIC.
+The purpose of DIC is to optimize predictions rather than identify a true model \parencite[][p. 4]{spiegelhalter2014deviance}, and the same is true for other information criteria motivated by cross-validation. % , and in this way is analogous to AIC rather than BIC.
 
 
-\subsubsection{Widely applicable information criteria}
+\subsubsection{Conditional widely applicable information criteria}
 
-WAIC
-%widely applicable information criterion \parencite[WAIC;][]{watanabe2010asymptotic}
-is a form of Bayesian information criteria that does not rely on point estimates for the parameters. The estimated effective number of parameters associated with WAIC is
+WAIC is a form of Bayesian information criterion that does not rely on point estimates for the parameters and requires only the log pointwise predictive density, which is:
+\begin{equation}
+  \mathrm{lpd}_c =
+  \sum_{j=1}^J \sum_{i=1}^I
+  \log \iiint
+    p(y_{ij} | \omega, \zeta_j)
+    p(\zeta_j | \psi, y)
+    p(\omega, \psi | y)
+  ~\mathrm{d}\omega \mathrm{d}\psi \mathrm{d}\zeta_j
+.\end{equation}
+The $\mathrm{lpd}_c$ is the full data log-likelihood integrated over the joint posterior for all parameters, and it differs from $\mathrm{lpd}_{\mathrm{DIC},c}$ in that it involves the log of an integrated probability rather than an integrated log probability.
+An estimate for it is obtained from the draws of MCMC simulation as
+\begin{equation}
+  \widehat{\mathrm{lpd}}_c =
+  \sum_{j=1}^J \sum_{i=1}^I \log
+  \left (
+    \frac{1}{S} \sum_{s=1}^S p(y_{ij} | \omega^s, \zeta_j^s)
+  \right )
+.\end{equation}
+%Using $\widehat \mathrm{lpd}_c$ to evaluate predictive performance will overstate the accuracy because the same data are used to fit the model and evaluate the predictions.
+The estimated effective number of parameters associated with WAIC is
 \begin{equation} \label{eq:3-waic-penalty}
   \hat p_{\mathrm{WAIC},c} =
   \sum_{j=1}^J \sum_{i=1}^I V_{s=1}^S \log p(y_{ij} | \omega^s, \zeta_j^s)
@@ -216,11 +231,11 @@ An alternative formula for the WAIC estimate of the effective number of paramete
   -2 \widehat{\mathrm{elpd}}_{\mathrm{WAIC}, c}
 .\end{equation}
 
-In contrast to DIC, WAIC is based on the full posterior and so is a fully Bayesian alternative that is invariant to reparameterization \parencite[][p. 2]{vehtari2016practical}. It is asymptotically equal to Bayesian cross-validation \parencite[][p. 2]{vehtari2016practical}. WAIC is unreliable when variance of $\log p(y_{ij} | \omega^s, \zeta_j^s)$ (from Equation~\ref{eq:3-waic-penalty}) exceeds .4 for a given observation \parencite[][p. 11]{vehtari2016practical}, similar to the DIC requirement that the penalty be small relative to the number of observations.
+In contrast to DIC, WAIC is based on the full posterior and so is a fully Bayesian alternative that is invariant to reparameterization \parencite[][p. 2]{vehtari2016practical}. It is asymptotically equal to Bayesian cross-validation \parencite[][p. 2]{vehtari2016practical}. WAIC is unreliable when the variance of $\log p(y_{ij} | \omega^s, \zeta_j^s)$ (from Equation~\ref{eq:3-waic-penalty}) exceeds .4 for a given observation \parencite[][p. 11]{vehtari2016practical}, similar to the DIC requirement that the penalty be small relative to the number of observations.
 The penalty in WAIC may be viewed as an approximation to the number of unconstrained parameters \parencite[][p. 1003]{gelman2014understanding}.
 
 
-\subsubsection{Approximate leave-one-out cross-valildation}
+\subsubsection{Conditional approximate leave-one-out cross-validation}
 
 A final possibility considered here is using importance weights to obtain estimates of leave-one-out cross-validation. The Bayesian leave-one-out expected log pointwise predictive density is
 \begin{equation}
@@ -238,10 +253,10 @@ where $y_{-i,j}$ is all observations except for the $i$th observation in cluster
 ,\end{equation}
 which bears resemblance to the posterior predictive distribution for a new response. An estimate of $\mathrm{elpd}_{\mathrm{LOO},c}$ may be obtained from the posterior draws as
 \begin{equation} \label{eq:importance-sampling}
-  \widehat{\mathrm{elpd}}_{\mathrm{LOO},c} =
+  \widehat{\mathrm{elpd}}_{\operatorname{PSIS-LOO},c} =
   \sum_{j=1}^J \sum_{i=1}^I \log
     \left ( \frac
-      {\sum_{s=1}^S w_{ij}^s p(y_{ij} | \omega, \zeta_j)}
+      {\sum_{s=1}^S w_{ij}^s p(y_{ij} | \omega^s, \zeta_j^s)}
       {\sum_{s=1}^S w_{ij}^s}
     \right )
 ,\end{equation}
@@ -267,7 +282,7 @@ PSIS-LOO is more robust than WAIC in cases with weak priors or influential obser
 
 \subsection{Marginal forms of out-of-sample predictive accuracy}
 
-\subsubsection{Target quantity}
+\subsubsection{Target quantity for the marginal case}
 
 Marginal likelihoods may be used with information criteria instead of the ``default'' conditional likelihoods. In this section, marginal equivalents of the conditional quantities in the previous section are described. The marginal likelihood, which integrates out $\zeta_j$, is
 \begin{equation} \label{eq:3-marginal-likelihood}
@@ -277,7 +292,7 @@ Marginal likelihoods may be used with information criteria instead of the ``defa
     \prod_{i=1}^I p(y_{ij} | \omega, \tilde \zeta_{j'})
   ~\mathrm{d} \tilde \zeta_{j'}
 ,\end{equation}
-where $y_{j}$ is the vector of responses for cluster $j$, and $\tilde \zeta_{j'}$ is a draw from the prior distribution indicated by $\psi$. The posterior for $\tilde \zeta_{j'}$, $p(\tilde \zeta_{j'} | \psi)$, is not directly influence by $y_{j}$, in contrast to $p(\zeta_j | y_j, \psi)$.
+where $y_{j}$ is the vector of responses for cluster $j$, and $p(\tilde \zeta_{j'} | \psi)$ is the prior distribution of $\zeta_j$ given by $\psi$. This prior is not directly influence by $y_{j}$ in contrast to $p(\zeta_j | y_j, \psi)$.
 Though the conditional likelihood is normally used to specify the Bayesian model in software for MCMC, the marginal likelihood may be calculated after MCMC simulation, which is the approach taken here.
 
 The predictive distribution for $\tilde y_{j'}$, which is a new response vector arising from a new cluster $j'$, is
@@ -292,7 +307,8 @@ where
 $p(\tilde y_{j'} | \omega, \psi)$
 is similar to
 $p(y_{j} | \omega, \psi)$
-(in Equation~\ref{eq:3-marginal-likelihood}) but for unobserved $\tilde y_{j'}$ and $\tilde \zeta_{j'}$. The density $p(\tilde y_{j'} | y)$ may be referred to as a mixed predictive distribution \parencite{Gelman1996, marshall2007identifying} as it does not condition on data $y_{j}$ for cluster $j$. The expected log pointwise predictive density for a new dataset, containing a new sample of clusters, is
+(in Equation~\ref{eq:3-marginal-likelihood}) but for unobserved $\tilde y_{j'}$ and $\tilde \zeta_{j'}$. The density $p(\tilde y_{j'} | y)$ may be referred to as a mixed predictive distribution \parencite{Gelman1996, marshall2007identifying}; it involves the posterior for $\omega$ and $\psi$ but the prior for $\zeta_j$.
+The expected log pointwise predictive density for a new dataset, containing a new sample of clusters, is
 \begin{equation}
   \mathrm{elpd}_m =
   \sum_{j=1}^J \sum_{i=1}^I
@@ -304,34 +320,29 @@ $p(y_{j} | \omega, \psi)$
 where $p_t$ again is the true data generating distribution.
 The $m$ subscript indicates that $\mathrm{elpd}_m$ results from the marginal likelihood.
 
-The marginal form for the log pointwise predictive density is
+
+\subsubsection{Marginal deviance information criteria}
+
+Marginal information criteria are calculated in much the same way as their conditional counterparts by substituting $p(y_{j} | \omega^s, \psi^s)$ for $p(y_{ij} | \omega^s, \zeta_j^s)$. For marginal DIC, the mean of the log likelihood is
 \begin{equation}
-  \mathrm{lpd}_m =
+  \mathrm{lpd}_{\mathrm{DIC},m} =
   \sum_{j=1}^J
-  \log \iint
+  \iint \log
     p(y_{j} | \omega, \psi)
     p(\omega, \psi | y)
   ~\mathrm{d} \omega \mathrm{d} \psi
 \end{equation}
-and may calculated from the draws of MCMC simulation as
+which is estimated in MCMC simulation as
 \begin{equation}
-  \widehat{\mathrm{lpd}}_m =
+  \widehat{\mathrm{lpd}}_{\mathrm{DIC},m} =
   \sum_{j=1}^J
-  \log \left [
-    \frac{1}{S} \sum_{s=1}^S
-      p(y_{j} | \omega^s, \psi^s)
-      p(\omega^s, \psi^s | y)
+  \frac{1}{S} \sum_{s=1}^S
+  \left [
+    \log p(y_{j} | \omega^s, \psi^s)
+    p(\omega^s, \psi^s | y)
   \right ]
-,\end{equation}
-where
-$p(y_{j} | \omega^s, \psi^s)$ is similar to
-$p(y_{j} | \omega, \psi)$
-in Equation~\ref{eq:3-marginal-likelihood} but for a given posterior sample $s$. Here the ``points'' in ``pointwise'' are clusters rather than individual observations, which is another difference between the marginal and conditional approaches. It is expected that $\mathrm{lpd}_m$ will be less than $\mathrm{lpd}_c$ \parencite{trevisani2003inequalities}.
-
-
-\subsubsection{Deviance information criteria}
-
-Marginal information criteria are calculated in much the same way as their conditional counterparts by substituting $p(y_{j} | \omega^s, \psi^s)$ for $p(y_{ij} | \omega^s, \zeta_j^s)$. For marginal DIC, the marginal log-likelihood evaluated at the posterior means of the parameters is also required:
+.\end{equation}
+The marginal log-likelihood evaluated at the posterior means of the parameters is also required:
 \begin{equation} \label{eq:2-best-lpdm}
   \widehat{\mathrm{lpd}}_m^* =
     \sum_{j=1}^J
@@ -355,26 +366,51 @@ and the final value on the deviance scale is
 This marginal DIC corresponds to the $\mathrm{DIC}_1$ of \textcite{celeux2006deviance}.
 
 
-\subsubsection{Widely applicable information criteria}
+\subsubsection{Marginal widely applicable information criteria}
+
+The marginal form for the log pointwise predictive density is
+\begin{equation}
+  \mathrm{lpd}_m =
+  \sum_{j=1}^J
+  \log \iint
+    p(y_{j} | \omega, \psi)
+    p(\omega, \psi | y)
+  ~\mathrm{d} \omega \mathrm{d} \psi
+\end{equation}
+and may estimated from the draws of MCMC simulation as
+\begin{equation}
+  \widehat{\mathrm{lpd}}_m =
+  \sum_{j=1}^J
+  \log \left [
+    \frac{1}{S} \sum_{s=1}^S
+      p(y_{j} | \omega^s, \psi^s)
+      p(\omega^s, \psi^s | y)
+  \right ]
+,\end{equation}
+where
+$p(y_{j} | \omega^s, \psi^s)$ is similar to
+$p(y_{j} | \omega, \psi)$
+in Equation~\ref{eq:3-marginal-likelihood} but for a given posterior sample $s$. Here the ``points'' in ``pointwise'' are clusters rather than individual observations, which is another difference between the marginal and conditional approaches. It is expected that $\mathrm{lpd}_m$ will be less than $\mathrm{lpd}_c$ \parencite{trevisani2003inequalities}.
 
 The effective number of parameters for marginal WAIC is
 \begin{equation}
-  \hat p_{m,\mathrm{WAIC}} =
+  \hat p_{\mathrm{WAIC},m} =
   \sum_{j=1}^J V_{s=1}^S \log p(y_{j} | \omega^s, \psi^s)
 ,\end{equation}
 the expected log pointwise predictive density is
 \begin{equation}
   \widehat{\mathrm{elpd}}_{\mathrm{WAIC}, m} =
-  \widehat{\mathrm{lpd}}_m^* - \hat p_{\mathrm{WAIC},m}
+  \widehat{\mathrm{lpd}}_m - \hat p_{\mathrm{WAIC},m}
 ,\end{equation}
 and the final value on the deviance scale is
 \begin{equation}
   \mathrm{WAIC}_m =
   -2 \widehat{\mathrm{elpd}}_{\mathrm{WAIC},m}
 .\end{equation}
+This marginal WAIC corresponds partially to the iWAIC of \textcite{li2015approximating}, though they did not consider the case of clustered data.
 
 
-\subsubsection{Approximate leave-one-out cross-valildation}
+\subsubsection{Marginal approximate leave-one-out cross-validation}
 
 The marginal Bayesian leave-one-out expected log pointwise predictive density is
 \begin{equation}
@@ -388,9 +424,9 @@ where $y_{-j}$ is the response vectors of all clusters except for the $j$th clus
     p(\omega, \psi | y_{-j})
   ~\mathrm{d} \omega \mathrm{d} \psi
 ,\end{equation}
-which bears resemblence to the mixed predictive distribution for $\tilde y_{j'}$. An estimate of $\mathrm{elpd}_{\mathrm{LOO},m}$ may be obtained from the posterior draws as
+which bears resemblance to the mixed predictive distribution for $\tilde y_{j'}$. An estimate of $\mathrm{elpd}_{\mathrm{LOO},m}$ may be obtained from the posterior draws as
 \begin{equation}
-  \widehat{\mathrm{elpd}}_{m,\mathrm{LOO}} =
+  \widehat{\mathrm{elpd}}_{\operatorname{PSIS-LOO},m} =
   \sum_{j=1}^J \log
     \left ( \frac
       {\sum_{s=1}^S w_{j}^s p(y_{j} | \omega^s, \psi^s)}
@@ -398,7 +434,6 @@ which bears resemblence to the mixed predictive distribution for $\tilde y_{j'}$
     \right )
 .\end{equation}
 The raw importance ratios are obtained as $p(y_{j} | \omega^s, \psi^s)^{-1}$, and these are adjusted by smoothing and truncating as before to obtain weights $w_{j}^s$.
-Let $\widehat{\mathrm{elpd}}_{\operatorname{PSIS-LOO},m}$ be the result when Pareto-smoothed importance weights are used in the above equation.
 On the deviance scale,
 \begin{equation}
   \operatorname{PSIS-LOO}_m =
@@ -458,27 +493,34 @@ where $p(y_{ij} | \omega^s, \mathrm{G}_{jm})$ is similar to the conditional like
 %   \right ]
 % .\end{equation}
 
-\section{Moving block bootstrap for estimating Monte Carlo error}
+\section{Circular block bootstrap for estimating Monte Carlo error}
 
-Straightforward expressions exist for estimating the Monte Carlo error for functions of parameters but not for more complicated quantities like DIC, WAIC, and PSIS-LOO. Instead, a the moving block bootstrap may be used to estimate the Monte Carlo error for these quantities. The separate chains of posterior draws are concatenated into a single set of draws. Then blocks of consecutive draws are drawn with replacement and concatenated into a new chain of the same length. A quantity of interest, in this case information criteria, is recorded for the new chain. The process is repeated a large number of times, and the standard deviation of the results provides a bootstrap estimate of the Monte Carlo error.
+Straightforward expressions exist for estimating the Monte Carlo error for means of variances of functions of parameters but not for more complicated quantities like DIC, WAIC, and PSIS-LOO. Instead, the moving block bootstrap \parencite{kunsch1989jackknife, liu1992moving}, a bootstrap technique for autocorrelated data, may be used to estimate the Monte Carlo error for these quantities. The moving block bootstrap may be used in this context by concatenating the several MCMC chains into a single chain having length $S$. Then blocks of consecutive draws are drawn with replacement and concatenated into a new chain of the same length, $S$. A quantity of interest, in this case information criterion, is recorded for the new chain. The process is repeated a large number of times, and the standard deviation of the results provides a bootstrap estimate of the Monte Carlo error. This approach may further be improved by using the circular block bootstrap \parencite{politis1992circular}, which joins the ends of the chain, forming a circle. In this way, a sampled block may wrap around from the last observations to the first observations, solving the problem in the moving block bootstrap of under sampling the early and late observations.
 
-Sampling from the original draws in blocks preserves the autocorrelation structure when forming a bootstrap chain, except at the "seams" where the blocks are stitched together. Some care is needed in selecting the size of the blocks to sufficiently maintain the autocorrelation structure while also obtaining sufficiently different block bootstrap samples. For inferences regarding variance, \textcite{hall1995blocking} suggest starting with a block size of $S^\frac{1}{3}$, where $S$ is the number of time series observations, or in this case, the number of posterior draws, and then using an algorithm of their design for refining this initial choice. Their procedure involves computing the bootstrap estimates many times, effectively bootstrapping the bootstrap procedure, and so is impractical for a very long series, as is the case here.
+Sampling from the original draws in blocks preserves the autocorrelation structure when forming a bootstrap chain, except at the ``seams'' where the blocks are stitched together. Some care is needed in selecting the size of the blocks to maintain the autocorrelation structure while also obtaining sufficiently different block bootstrap samples.
+Data-dependent means of selecting a block length have been proposed
+\parencite{hall1995blocking, buhlmann1999block,
+           politis2004automatic, patton2009correction},
+but these methods are not used in this chapter. Instead, a simulation is conducted in which a wide range of block sizes are chosen with the circular block bootstrap in order to study how the  results may depend on block size. As an aside, both \textcite{hall1995blocking} and \textcite{buhlmann1999block} suggest a block size of $S^\frac{1}{3}$ as a starting point.
+
+% For inferences regarding variance, \textcite{hall1995blocking} suggest starting with a block size of $S^\frac{1}{3}$, where $S$ is the number of time series observations, or in this case, the number of posterior draws, and then using an algorithm of their design for refining this initial choice. Their procedure involves computing the bootstrap estimates many times, effectively bootstrapping the bootstrap procedure, and so is impractical for a very long series, as is the case here.
 %Other procedures have been developed to selecting a block size \parencite[for example,][]{politis2004automatic, patton2009correction}, but these are similarly impractical for data of this type.
 
-However, given that the $S$ tends to be very large in MCMC compared with the lag at which autocorrelation becomes negligible, applications of this technique to MCMC draws may be more robust than for the cases considered by \textcite{hall1995blocking}. I propose obtaining Monte Carlo error estimates using a block size of $S^\frac{1}{3}$ and then obtaining the same for a larger and smaller block size as a robustness check. If the results do not differ much between block sizes, then the initial choice of $S^\frac{1}{3}$ may be accepted.
+% However, given that the $S$ tends to be very large in MCMC compared with the lag at which autocorrelation becomes negligible, applications of this technique to MCMC draws may be more robust than for the cases considered by \textcite{hall1995blocking}. I propose obtaining Monte Carlo error estimates using a block size of $S^\frac{1}{3}$ and then obtaining the same for a larger and smaller block size as a robustness check. If the results do not differ much between block sizes, then the initial choice of $S^\frac{1}{3}$ may be accepted.
 
 
-\section{Simulation study to assess the accuracy of numerical integration}
+\section{Simulation study of adaptive quadrature and circular block boot}
 
 \subsection{Data and model}
 
-<<simulation_start>>=
+<<sim_start>>=
 load("Simulation/simulation.Rdata")
 @
 
 Data are generated and analyzed using a linear random intercept model:
 \begin{equation}
-  y_{ij} | x_j, \beta, \zeta_j \sim \mathrm{N}(x_j'\beta + \zeta_j, \sigma^2)
+  y_{ij} | x_j, \beta, \zeta_j, \sigma^2 \sim
+  \mathrm{N}(x_j'\beta + \zeta_j, \sigma^2)
 \end{equation}
 \begin{equation}
   \zeta_j \sim \mathrm{N}(0, \psi^2)
@@ -515,16 +557,7 @@ One dataset is simulated for each cluster size
 $I \in \{\Sexpr{paste(sim_I,collapse=",")}\}$.
 Each dataset has $J = \Sexpr{sim_J}$ clusters, and the covariates in $x_j$ are random draws from a standard normal distribution.
 
-
-% $\zeta_j$ is a parameter we may want to either condition on or integrate out, and $\psi$ is the parameter for its distribution. Let $\omega = \{\beta, \sigma\}$ represent all other parameters. Bayes theorem indicates that the posterior for the parameters is
-% \begin{equation}
-%   p(\omega, \psi, \zeta_j | y) \propto
-%   \left[
-%     \prod_{j=1}^J \prod_{i=1}^I p(y_{ij} | x_j, \omega, \zeta_j)
-%   \right]
-%   p(\omega, \psi, \zeta_j)
-% ,\end{equation}
-% where $p(y_{ij} | x_j, \omega, \zeta_j)$ is the likelihood for one observation and $p(\omega, \zeta_j, \psi)$ is the joint prior distribution.
+All MCMC simulations within the simulation study use \Sexpr{n_chains} chains of \Sexpr{n_iter} iterations. The first \Sexpr{n_warmup} iterations of each chain are discarded, leaving a total of \Sexpr{n_posterior} posterior draws across the chains. Convergence is monitored using the $\hat R$ statistic of \textcite{gelman1992inference}; when $\hat R < 1.1$ for each parameter and for the log posterior, convergence may be inferred.
 
 The linear random intercept model is a special case of the general model described previously. Let $\omega = \{\beta, \sigma\}$, and then $\omega$, $\zeta_j$, and $\psi$ directly correspond to the parameters of the general model. The likelihood for the linear random intercept model is
 \begin{equation} \label{eq:3-conditional-likelihood}
@@ -552,187 +585,206 @@ where $\Phi$ is the multivariate normal density function and $\Omega$ is an $I$-
 Marginal information criteria may be calculated from this $\widehat{\mathrm{lpd}}_m$ without resorting to a quadrature approximation.
 
 
-\subsection{Results}
+\subsection{Conditional and marginal information criteria estimates}
 
-Marginal information criteria for the \Sexpr{numword(length(sim_I))} simulated datasets, using the multivariate normal density (as in Equation~\ref{eq:3-analytic}) to evaluate the marginal likelihood, are presented in Table~\ref{tab:3-icmvn}. The values customarily reported for WAIC or PSIS-LOO are $-2 \times \widehat{\mathrm{elpd}}$, which are the focus of the results that follow. Results are similar for WAIC and PSIS-LOO but differ somewhat for DIC.
+<<sim_count_parameters>>=
+# No output
+p_c <- length(sim_beta) + sim_J + 1
+p_m <- length(sim_beta) + 2
+@
+
+Information criteria for the \Sexpr{numword(length(sim_I))} simulated datasets are presented in Table~\ref{tab:3-sim-ic}. The multivariate normal density (as in Equation~\ref{eq:3-analytic}) is used to evaluate the marginal likelihood. Values for WAIC and PSIS-LOO ($-2\widehat{\mathrm{elpd}}$) are very close to one another in both the conditional and marginal cases, while those for DIC are slightly lower.
+
+The effective number of parameters $\hat p$ may be compared against the number of parameters in focus. In the conditional focus, there are \Sexpr{p_c} parameters (contained in $\{\beta, \zeta, \sigma\}$), but that $\hat p_c$ is less than this count in all cases. The reason for this discrepancy is that the prior on $\zeta$ is informative and as such partially constrains $\zeta$, reducing the effective number of parameters. As cluster size increases, $\hat p_c$ decreases, reflecting the increase of data available for estimating each $\zeta_j$ and the resulting decline in influence of the prior. In the marginal focus, there are \Sexpr{p_m} parameters (contained in $\{\beta, \sigma, \psi\}$), and $\hat p_m$ approximately matches this count.
 
 \begin{table}[htb]
 \centering
-<<icmvn, results = tex>>=
-# df_mvn <- unique(df[c("I", "IC", grep("^mvn_.*$", names(df), value = TRUE))])
-# names(df_mvn) <- gsub("^mvn_", "", names(df_mvn))
-# df_mvn <- df_mvn[, c("IC", "I", "value", "elpd", "p")]
-# df_mvn$lpd <- df_mvn$elpd + df_mvn$p
-# df_mvn$elpd <- NULL
-#
-# df_mvn$IC <- as.character(df_mvn$IC)
-# df_mvn$IC[df_mvn$I != min(sim_I)] <- ""
-# names(df_mvn)[names(df_mvn) == "IC"] <- ""
-# names(df_mvn)[names(df_mvn) == "I"] <- "$I$"
-# names(df_mvn)[names(df_mvn) == "value"] <-
-#   "$-2 \\times \\widehat{\\mathrm{elpd}}_m$"
-# names(df_mvn)[names(df_mvn) == "p"] <- "$\\hat{p}_m$"
-# names(df_mvn)[names(df_mvn) == "lpd"] <- "$\\widehat{\\mathrm{lpd}}_m$"
+<<sim_ic_table, results = tex>>=
+df_mvn <- subset(df_combine, nagq == 0 & variable %in% c("dev", "p"))
+sort_key <- c(DIC = 1, WAIC = 2, "PSIS-LOO" = 3)
+df_mvn$sort_by_ic <- sort_key[df_mvn$IC]
+df_mvn <- dcast(df_mvn, I + sort_by_ic + IC ~ focus + variable)
+df_mvn$sort_by_ic <- NULL
+names(df_mvn) <- c("$I$", "Criterion", "$-2\\widehat{\\mathrm{elpd}}_c$",
+                   "$\\hat p_c$", "$-2\\widehat{\\mathrm{elpd}}_m$",
+                   "$\\hat p_m$")
 
+df_q <- subset(df_quad_compare, variable == "dev")
+n <- nrow(df_q)
+dif_last_agq <- c(NA, with(df_q, agq[2:n] - agq[1:(n-1)]))
+df_q$dif_last_agq <- dif_last_agq
+df_q <- melt(df_q, id.vars = c("I", "IC", "focus", "nagq"),
+           measure.vars = c("dif_mvn", "dif_nagq"), na.rm = TRUE)
+df_q$sort_by_ic <- sort_key[df_q$IC]
+df_q <- dcast(subset(df_q, abs(df_q$value) < .01),
+              I + sort_by_ic + IC ~ variable, min, value.var = "nagq")
+# Following warning is a known bug and can be ignored:
+# In .fun(.value[0], ...) : no non-missing arguments to min; returning Inf
+df_q$sort_by_ic <- NULL
+names(df_q) <- c("$I$", "Criterion", "Absolute", "Relative")
 
-df_mvn <- unique(df[, c("I", "variable", "IC", "mvn")])
-df_mvn <- subset(df_mvn, variable %in% c("dev", "elpd", "p"))
-df_mvn <- dcast(df_mvn, IC + I ~ variable)
-ic_order <- c("DIC" = 1, "WAIC" = 2, "PSIS-LOO" = 3)
-df_mvn <- df_mvn[order(ic_order[df_mvn$IC], df_mvn$I), ]
-names(df_mvn) <- c("", "$I$", "$-2\\widehat{\\mathrm{elpd}}_m$",
-                   "$\\widehat{\\mathrm{elpd}}_m$", "$p_m$")
-
-last_displays <- rep("f", times = ncol(df_mvn) - 2)
-xtab_mvn <- xtable(df_mvn, display = c("s", "s", "d", last_displays))
-add_hlines <- which(1:nrow(xtab_mvn) %% length(sim_I) == 0)
-print(xtab_mvn, include.rownames = FALSE, floating = FALSE,
-      hline.after = c(-1, 0, add_hlines),
+df_both <- cbind(df_mvn, df_q[,-1:-2])
+xtab_both <- xtable(df_both, display = c("d","d","s","f","f","f","f","d","d"))
+add_hlines <- which(1:nrow(xtab_both) %% length(sim_I) == 0)
+add_row <- list(list(-1),
+                paste("\\hline",
+                      "& & & & & & \\multicolumn{2}{c}{Minimum N. nodes} \\\\",
+                      "\\cline{7-8} \n"))
+print(xtab_both, include.rownames = FALSE, floating = FALSE,
+      hline.after = c(0, add_hlines), add.to.row = add_row,
       sanitize.text.function = function(x) x,
       sanitize.colnames.function = function(x) x)
 @
-\caption{Marginal DIC, WAIC, and PSIS-LOO for the simulated datasets using the multivariate normal density.
-% The values customarily reported for WAIC and PSIS-LOO are $-2 \times \widehat{\mathrm{elpd}}$.
-}
-\label{tab:3-icmvn}
+\caption{Conditional and marginal DIC, WAIC, and PSIS-LOO for the simulated datasets using the multivariate normal density. In the conditional focus, there are a total of
+\Sexpr{p_c}
+model parameters, whereas there are
+\Sexpr{p_m}
+in the marginal focus. Shown on far right are the minimum numbers of adaptive quadrature nodes (among those considered) needed to obtain an absolute and relative error less than .01. Absolute error refers to the absolute difference between the adaptive quadrature approximation and exact results. Relative error refers to the difference between the adaptive quadrature approximation and the same approximation using one-third fewer nodes.}
+\label{tab:3-sim-ic}
 \end{table}
 
-<<compare_text>>=
-# For in text, what number of nodes results in minimal change
-which_compare <- aggregate(dif_mvn ~ I + IC,
-                           data = subset(df, variable == "dev"),
-                           function(x) which(abs(x) < .01)[1])
-which_compare$nodes <- sim_nodes[which_compare$dif_mvn]
 
-df_difficult <- subset(df, grepl("(best|mean)_lpd", variable) &
-                         I == max(sim_I) &
-                         nagq == min(sim_nodes))
-best_lpd <- df_difficult$dif_mvn[df_difficult$variable == "best_lpd"]
-mean_lpd <- df_difficult$dif_mvn[df_difficult$variable == "mean_lpd"]
-@
+\subsection{Adaptive quadrature approximation}
 
-Next, the same quantities are calculated using \Sexpr{and(sim_nodes)} adaptive quadrature nodes. The difference between results derived from the multivariate normal density and adaptive quadrature are shown in Figure~\ref{fig:3-compare}.
-For DIC, a difference less than .01 was achieved by using
-\Sexpr{and(unlist(subset(which_compare, IC == "DIC", nodes)))}
-nodes for cluster sizes
-$I =$ \Sexpr{and(unlist(subset(which_compare, IC == "WAIC", I)))},
-respectively.
-For WAIC, the same was achieved by using
-\Sexpr{and(unlist(subset(which_compare, IC == "WAIC", nodes)))}
-nodes, and for PSIS-LOO
-\Sexpr{and(unlist(subset(which_compare, IC == "PSIS-LOO", nodes)))}
-nodes were required. Judging a difference of .01 to be a sufficiently close approximation is somewhat arbitrary but should be conservative unless the information criteria values are very close.
-
-DIC required more nodes than WAIC or PSIS-LOO to obtain reasonable accuracy, which appears to be due to the difficulty in obtaining accurate values for $\widehat{\mathrm{lpd}}_m^*$ (Equation~\ref{eq:2-best-lpdm}) with adaptive quadrature. To illustrate, consider the most difficult simulation condition, which involved using \Sexpr{min(sim_nodes)} nodes to estimate marginal quantities for cluster sizes of $I=\Sexpr{max(sim_I)}$. In this condition, the difference between the adaptive quadrature approximation for $\widehat{\mathrm{lpd}}_m^*$ and the exact value was \Sexpr{f(best_lpd, 2)}, while the same for $\widehat{\mathrm{lpd}}_m$ was \Sexpr{f(mean_lpd, 2)}.
-Given that adaptive quadrature calculations for $p(y_{j} | \omega^s, \psi^s)$ and $p(y_{j} | \bar \omega, \bar \psi)$ are virtually the same, the difference in accuracy is likely due to the fact that $p(y_{j} | \omega^s, \psi^s)$ is averaged over many posterior draws to obtain $\widehat{\mathrm{lpd}}_m$, but no such averaging is involved in using $p(y_{j} | \bar \omega, \bar \psi)$ to obtain $\widehat{\mathrm{lpd}}_m^*$. In other words, errors resulting from adaptive quadrature appear to cancel out, at least partially, when they are averaged over posterior draws.
+Marginal DIC, WAIC, and PSIS-LOO are calculated on the same \Sexpr{numword(length(sim_I))} simulated datasets using \Sexpr{and(sim_nodes)} adaptive quadrature nodes. Each number of nodes is about 50\% more than the preceding number. The absolute difference between approximate results from adaptive quadrature and exact results from the multivariate normal density are shown in Figure~\ref{fig:3-compare}. In this chapter, an absolute difference less than .01 is judged to be a sufficiently close approximation, which is somewhat arbitrary but should be conservative unless the information criteria values are very close. The figure indicates that more nodes are required as cluster size increases and that DIC requires more nodes than WAIC or PSIS-LOO.
 
 \begin{figure}[tb]
 \begin{center}
-<<compare_plot, fig = TRUE, height = 3.5>>=
-spread_x <- max(sim_nodes) - min(sim_nodes)
-df_compare <- subset(df, variable == "dev")
-df_compare$nudge <- 0
-df_compare$I <- factor(df_compare$I, rev(unique(df_compare$I)))
+<<sim_agq_plot, fig = TRUE, height = 3.5>>=
+df_qc <- subset(df_quad_compare, variable == "dev")
+key <- c("DIC" = "DIC[m]",
+         "WAIC" = "WAIC[m]",
+         "PSIS-LOO" = "PSIS-LOO[m]")
+df_qc$Criterion <- factor(key[df_qc$IC], key)
+df_qc$I <- factor(df_qc$I, rev(unique(df_qc$I)))
 legend_title <- "Cluster\nsize"
-
-ggplot(df_compare) +
+ggplot(df_qc) +
   aes(x = nagq, y = abs(dif_mvn), color = as.factor(I), pch = as.factor(I)) +
-  geom_hline(yintercept = .01) +
-  geom_line(show.legend = TRUE) +
-  geom_point(show.legend = TRUE) +
+  geom_hline(yintercept = .01, lty = "dashed") +
+  geom_line() +
+  geom_point() +
   scale_x_continuous(breaks = sim_nodes) +
   scale_y_log10() +
-  facet_wrap(~IC) +
+  facet_wrap(~Criterion, labeller = label_parsed) +
   xlab(expression(paste("Number of adaptive Gaussian quadrature nodes (",
                          italic(M), ")"))) +
   ylab("Absolute error of approximation") +
   labs(color = legend_title, pch = legend_title) +
   my_theme +
   theme(panel.grid.minor.x = element_blank())
-
-# Hard coding! Adjustments for labels.
-# df_compare$nudge[df_compare$I == 25] <- 0
-# df_compare$nudge[df_compare$I == 50] <- 0
-# expand_prop <- .4
-# spread_prop <- .03
-#
-# ggplot(df_compare) +
-#   aes(x = nagq, y = dif_mvn, color = as.factor(I), pch = as.factor(I)) +
-#   geom_hline(yintercept = .01) +
-#   geom_line(show.legend = FALSE) +
-#   geom_point(show.legend = FALSE) +
-#   geom_text(data = subset(df_compare, nagq == sim_nodes[1]),
-#             mapping = aes(label = paste0("italic(I)==", I),
-#                           y = abs(dif_mvn) + nudge),
-#             parse = TRUE, hjust = "right", nudge_x = -spread_x*spread_prop,
-#             show.legend = FALSE) +
-#   expand_limits(x = sim_nodes[1] - spread_x*expand_prop) +
-#   scale_x_continuous(breaks = sim_nodes) +
-#   facet_wrap(~IC) +
-#   xlab(expression(paste("Number of adaptive Gaussian quadrature nodes (",
-#                          italic(M), ")"))) +
-#   ylab("Error of approximation") +
-#   labs(color = legend_title, pch = legend_title) +
-#   my_theme +
-#   theme(panel.grid.minor.x = element_blank())
 @
 \end{center}
-\caption{Differences in marginal information criteria ($-2 \times \widehat{\mathrm{elpd}}_m$) between calculations using adaptive quadrature (approximate method) and the multivariate normal density function (exact method). The $y$-axis uses a log scale. The horizontal line is drawn at .01.}
+\caption{Differences in marginal information criteria ($-2 \times \widehat{\mathrm{elpd}}_m$) between calculations using adaptive quadrature (approximate method) and the multivariate normal density function (exact method). The $y$-axis uses a log scale. The dashed line is drawn at .01.}
 \label{fig:3-compare}
 \end{figure}
 
-<<quadcheck_text>>=
+<<sim_agq_text>>=
 # For in text, what number of nodes results in minimal change
-df_quadcheck <- subset(df, variable == "dev" & !is.na(dif_nagq))
-which_quadchk <- aggregate(dif_nagq ~ I + IC,
-                           data = df_quadcheck,
+df <- subset(df_quad_compare, variable == "dev")
+n <- nrow(df)
+dif_last_agq <- c(NA, with(df, agq[2:n] - agq[1:(n-1)]))
+df$dif_last_agq <- dif_last_agq
+which_compare <- aggregate(dif_last_agq ~ I + IC,
+                           data = df,
                            function(x) which(abs(x) < .01)[1])
-which_quadchk$nodes <- sim_nodes[which_quadchk$dif_nagq + 1]
+which_compare$nodes <- sim_nodes[which_compare$dif_last_agq]
+df_difficult <- subset(df_quad_compare, grepl("(best|mean)_lpd", variable) &
+                         I == max(sim_I) &
+                         nagq == min(sim_nodes))
+best_lpd <- df_difficult$dif_mvn[df_difficult$variable == "best_lpd"]
+mean_lpd <- df_difficult$dif_mvn[df_difficult$variable == "mean_lpd"]
 @
 
-In normal application, adaptive quadrature will only be used when an exact calculation is not available, and so a sufficient number of nodes cannot generally be determined by comparison to an exact calculation. In this case, results may be obtained using, for example, $M$ and $1.5M$ nodes (rounded as needed). If the difference is negligible, perhaps less than .01, then $M$ may be judged sufficient. If the difference is too great, a yet larger number of nodes may be tried (such as $1.5^2M$) and compared against the results from $1.5M$ nodes. This process may be continued until a negligible difference is achieved. The values $M =$ \Sexpr{and(sim_nodes)} were selected to follow this pattern. The choices of increasing the number of nodes by 50\% and declaring .01 a negligible difference are arbitrary, but these choices are expected to be conservative.
-Figure~\ref{fig:3-quadcheck} shows the results of employing this strategy for choosing a number of nodes.
-For WAIC, results differed by less than .01 with
-\Sexpr{and(unlist(subset(which_quadchk, IC == "WAIC", nodes)))}
-nodes for cluster sizes
-$I =$ \Sexpr{and(unlist(subset(which_quadchk, IC == "WAIC", I)))},
-respectively. For PSIS-LOO, the same is obtained using
-\Sexpr{and(unlist(subset(which_quadchk, IC == "PSIS-LOO", nodes)))}
-nodes.
-For DIC,
-\Sexpr{and(unlist(subset(which_quadchk, IC == "PSIS-LOO", nodes))[1:2])}
-nodes were required for cluster sizes
-$I =$ \Sexpr{and(unlist(subset(which_quadchk, IC == "DIC", I))[1:2])},
-while none of the attempted number of nodes reach this threshold for the cluster size of
-\Sexpr{and(unlist(subset(which_quadchk, IC == "DIC", I))[3])}.
-%It is expected that this strategy will either select a number of nodes equal to that selected by comparison to the multivariate normal density or the next larger number of nodes. The reason for this expectation is that the gains in accuracy diminished rapidly as the number of nodes increases, as seen in Figure~\ref{fig:3-quadcheck}.
+Marginal DIC required more nodes than WAIC or PSIS-LOO to obtain the desired accuracy, which appears to be due to the difficulty in obtaining accurate values for $\widehat{\mathrm{lpd}}_m^*$ (Equation~\ref{eq:2-best-lpdm}) with adaptive quadrature. To illustrate, consider the most difficult simulation condition, which involved using \Sexpr{min(sim_nodes)} nodes to estimate marginal quantities for cluster sizes of $I=\Sexpr{max(sim_I)}$. In this condition, the difference between the adaptive quadrature approximation for $\widehat{\mathrm{lpd}}_m^*$ and the exact value was \Sexpr{f(best_lpd, 2)}, while the corresponding difference for $\widehat{\mathrm{lpd}}_m$ was \Sexpr{f(mean_lpd, 2)}.
+Given that adaptive quadrature calculations for $p(y_{j} | \omega^s, \psi^s)$ and $p(y_{j} | \bar \omega, \bar \psi)$ are identical, the disparity in accuracy is likely due to the fact that $p(y_{j} | \omega^s, \psi^s)$ is averaged over many posterior draws to obtain $\widehat{\mathrm{lpd}}_m$, but no such averaging is involved in using $p(y_{j} | \bar \omega, \bar \psi)$ to obtain $\widehat{\mathrm{lpd}}_m^*$. It may be that errors resulting from adaptive quadrature cancel out, at least partially, when they are averaged over posterior draws.
+
+In normal application, adaptive quadrature will only be used when an exact calculation is not available, and so a sufficient number of nodes cannot generally be determined by comparison to an exact calculation.
+In this case, results may be obtained and compared for different numbers of nodes to calculate a \emph{relative} error of approximation. The relative error of approximation may be calculated for $M$ nodes by finding the absolute value of difference between the information criteria result using $M$ nodes and using $\frac{2}{3}$, which corresponds to the node counts used in this study. In this chapter, an approximation using $M$ nodes is judged sufficient when the relative error of approximation is less than .01, which again is somewhat arbitrary but is expected to be conservative. Table~\ref{tab:3-sim-ic} provides the minimum number of nodes needed to obtain the desired absolute (that is, in comparison to the exact result) and relative precision. The sufficient number of nodes as judged by relative precision tends to be the next higher number than that indicated by absolute precision. In this way, the simulation results support the conservativeness of this approach in testing the number of nodes used.
+
+
+\subsection{Circular block bootstrap}
+
+<<sim_bruteforce_load>>=
+load("Simulation/bootstrap.Rdata")
+@
+
+Focusing on WAIC, the circular block bootstrap will be used to obtain standard error estimates. Before that, however, a ``brute force'' approach is used as a reliable means of studying the variability of WAIC that arises from Monte Carlo error. To this end, \Sexpr{length(sim_bs_l)} independent sets of MCMC chains are simulated, and for each conditional and marginal versions of $\mathrm{lpd}_{\mathrm{WAIC}}$, $p_{\mathrm{WAIC}}$, and $\mathrm{WAIC}$ are estimated. The same simulated dataset is used throughout, having \Sexpr{sim_J} clusters of size \Sexpr{sim_bs_I}. The standard deviation of the brute force results may serve as a benchmark against which to compare the bootstrap standard error estimates.
+The means and standard deviations related to the brute force replications are presented in Table~\ref{tab:3-sim-bf}. Conditional WAIC ($\mathrm{WAIC}_c$) is substantially more variable than marginal WAIC ($\mathrm{WAIC}_m$), as shown by its larger standard deviation. For either the conditional or marginal case, most of the variability appears tied to $p_{\mathrm{WAIC}}$ rather than $\mathrm{lpd}_{\mathrm{WAIC}}$, which has a relatively low standard deviation across replications.
+
+\begin{table}[htb]
+\centering
+<<sim_bruteforce_table, results = tex>>=
+est_names <- c("lpd_waic", "p_waic", "waic")
+df_brute <- melt(df_bootstrap, id.vars = c("l", "focus"),
+                 measure.vars = est_names)
+
+df_mean <- dcast(df_brute, variable ~ focus, mean)
+names(df_mean)[2:3] <- paste0(names(df_mean)[2:3], "_mean")
+df_sd <- dcast(df_brute, variable ~ focus, sd)
+names(df_sd)[2:3] <- paste0(names(df_sd)[2:3], "_sd")
+df_brute <- merge(df_mean, df_sd)
+df_brute <- cbind(df_brute[,c(1,3,5)], NA, df_brute[,c(2,4)])
+names(df_brute) <- c("", "Mean", "SD", "", "Mean", "SD")
+
+key <- c("lpd_waic" = "$\\mathrm{lpd}_\\mathrm{WAIC}$",
+         "p_waic" = "$\\hat p_\\mathrm{WAIC}$",
+         "waic" = "$\\mathrm{WAIC}$")
+df_brute[,1] <- key[df_brute[,1]]
+
+xtab_bf <- xtable(df_brute, display = c("s","s","f","f","s","f","f"))
+add_row <- list(list(-1),
+                paste("\\hline",
+                      "& \\multicolumn{2}{c}{Conditional} & ",
+                      "& \\multicolumn{2}{c}{Marginal} \\\\",
+                      "\\cline{2-3} \\cline{5-6} \n"))
+print(xtab_bf, include.rownames = FALSE, floating = FALSE,
+      hline.after = c(0, 3), add.to.row = add_row,
+      sanitize.text.function = function(x) x,
+      sanitize.colnames.function = function(x) x)
+@
+\caption{Means and standard deviations for the ``brute force'' results for WAIC for the simulation. Results are from \Sexpr{length(sim_bs_l)} independent sets of MCMC chains using the same simulated dataset ($I=\Sexpr{sim_I[1]}$).}
+\label{tab:3-sim-bf}
+\end{table}
+
+Next the circular block bootstrap is applied once each to the \Sexpr{length(sim_bs_l)} independent sets of MCMC chains. Block sizes ranging from \Sexpr{min(sim_bs_l)} to \Sexpr{max(sim_bs_l)} were used, and the results are presented in Figure~\ref{fig:3-bootstrap}. The bootstrap substantially underestimates the Monte Carlo error for both conditional and marginal WAIC. While Monte Carlo error estimates for $\mathrm{lpd}_\mathrm{WAIC}$ and $p_\mathrm{WAIC}$ are both too small using the bootstrap, the discrepancy for $p_\mathrm{WAIC}$ is much worse. Further, block size does not appear to have an effect on estimated Monte Carlo error, possibly because autocorrelations with Stan are typically low. This bootstrap scheme may also be applied to DIC and PSIS-LOO, but there is no reason to expect better performance.
 
 \begin{figure}[tb]
 \begin{center}
-<<quadcheck_plot, fig = TRUE, height = 3.5>>=
-spread_x <- max(sim_nodes[-1]) - min(sim_nodes[-1])
-df_quadcheck$nudge = 0
-df_quadcheck$I <- factor(df_quadcheck$I, rev(unique(df_quadcheck$I)))
-legend_title <- "Cluster\nsize"
+<<sim_bootstrap_plot, fig = TRUE>>=
+df_bf <- melt(df_bootstrap, id.vars = c("l", "focus", "IC"),
+              measure.vars = c("lpd_waic", "p_waic", "waic"))
+df_bf <- dcast(df_bf, focus + IC + variable ~ ., sd)
+names(df_bf)[names(df_bf) == "."] <- "bruteforce_sd"
 
-ggplot(df_quadcheck) +
-  aes(x = nagq, y = abs(dif_nagq), color = as.factor(I), pch = as.factor(I)) +
-  geom_hline(yintercept = .01) +
-  geom_line(show.legend = TRUE) + geom_point(show.legend = TRUE) +
-  scale_x_continuous(breaks = sim_nodes[-1]) +
-  scale_y_log10() +
-  facet_wrap(~IC) +
-  xlab(expression(paste("Number of adaptive Gaussian quadrature nodes (",
-                         italic(M), ")"))) +
-  ylab(expression(paste("Absolute difference from previous ",
-                         italic(M)))) +
-  labs(color = legend_title, pch = legend_title) +
-  my_theme +
-  theme(panel.grid.minor.x = element_blank())
+mce_names <- paste0("mce_", est_names)
+df_bs <- melt(df_bootstrap, id.vars = c("l", "focus"), measure.vars = mce_names)
+names(df_bs)[names(df_bs) == "value"] <- "bootstrap_est"
+df_bs$variable <- sub("mce_", "", df_bs$variable)
+df_bs <- merge(df_bs, df_bf)
+
+df_bs$variable <- paste0(df_bs$variable, "_",
+                         ifelse(df_bs$focus == "Marginal", "m", "c"))
+key <- c("lpd_waic_c" = "lpd[list(WAIC,c)]",
+         "p_waic_c" = "p[list(WAIC,c)]",
+         "waic_c" = "WAIC[c]",
+         "lpd_waic_m" = "lpd[list(WAIC,m)]",
+         "p_waic_m" = "p[list(WAIC,m)]",
+         "waic_m" = "WAIC[m]")
+df_bs$variable <- factor(key[df_bs$variable], key)
+
+ggplot(df_bs) +
+  aes(x = l, y = bootstrap_est) +
+  geom_hline(aes(yintercept = bruteforce_sd), linetype = "dashed") +
+  geom_point(alpha = .2) +
+  geom_smooth(method = "loess", se = FALSE) +
+  facet_wrap(~ variable, nrow = 2, scales = "free_y", labeller = label_parsed) +
+  xlab("Block size") +
+  ylab("Bootstrap standard error estimate") +
+  my_theme
 @
 \end{center}
-\caption{Differences in marginal information criteria ($-2 \times \widehat{\mathrm{elpd}}_m$) between using $M$ adaptive quadrature nodes and $\approx \frac{2}{3}M$ nodes. The $y$-axis uses a log scale. The horizontal line is drawn at .01.}
-\label{fig:3-quadcheck}
+\caption{Circular block bootstrap standard error estimates for WAIC by block size for the simulation. Points are bootstrap estimates from \Sexpr{length(sim_bs_l)} independent sets of MCMC chains using the same simulated dataset, and the solid line is a loess curve fit to the points. The dashed line is the ``brute force'' standard error estimate. The $y$-axes vary.}
+\label{fig:3-bootstrap}
 \end{figure}
 
 
@@ -746,7 +798,7 @@ load("Application/application.Rdata")
 load("Application/brute_force.Rdata")
 @
 
-A latent regression Rasch model is fit to a dataset on verbal aggression \parencite{Vansteelandt2000} that consists of $J = 316$ persons and $I = 24$ items. Participants were instructed to imagine four frustrating scenarios, and for each they responded ``yes'', ``perhaps'', or ``no'' regarding whether they would react by cursing, scolding, and shouting. Participants also responded whether they would \emph{want} to engage in those three behaviors, resulting in a total six items per scenario (cursing/scolding/shouting $\times$ do/want). An example item is, ``A bus fails to stop for me. I would want to curse.'' The items have been dichotomized for this example by combining ``yes'' and ``perhaps'' responses. Two person-related covariates are included: the respondent's trait anger score \parencite{spielberger1988state}, which is a raw score from a separate measure taking values ranging from 11 to 39 in the data, and an indicator for whether the respondent is male, which takes the values 0 and 1.
+A latent regression Rasch model is fit to a dataset on verbal aggression \parencite{Vansteelandt2000} that consists of $J = 316$ persons and $I = 24$ items. Participants were instructed to imagine four frustrating scenarios, and for each they responded ``yes'', ``perhaps'', or ``no'' regarding whether they would react by cursing, scolding, and shouting. Participants also responded whether they would \emph{want} to engage in those three behaviors, resulting in a total six items per scenario (cursing/scolding/shouting $\times$ doing/wanting). An example item is, ``A bus fails to stop for me. I would want to curse.'' The items have been dichotomized for this example by combining ``yes'' and ``perhaps'' responses. Two person-related covariates are included: the respondent's trait anger score \parencite{spielberger1988state}, which is a raw score from a separate measure taking values ranging from 11 to 39 in the data, and an indicator for whether the respondent is male, which takes the values 0 and 1.
 
 The model is
 % \begin{equation} \label{eq:4-latregrasch}
@@ -776,134 +828,90 @@ The priors for $\lambda$ match those recommended by \textcite{gelman2008weakly} 
 $\lambda \sim t_1(0, 1)$,
 where $t_1$ is the Student's $t$ distribution with one degree of freedom. A transformation may be applied to $\lambda$ to find what the regression coefficients would be on the original scale of the covariates.
 
-Focus is placed on $\zeta_j$ for the conditional approach, which yields a prediction inference involving new responses from the same persons (and items). Perhaps more realistically, the marginal approach places focus on $\sigma$, implying a prediction inference involving new responses from a new sample of persons.
+Focus is placed on $\zeta_j$ for the conditional approach, which yields a prediction inference involving new responses from the same persons (and items). The marginal approach, perhaps more realistically, places focus on $\sigma$, implying a prediction inference involving new responses from a new sample of persons.
 Five competing models are considered, differing only in what person covariates are included: Model 1 includes no covariates, Model 2 has the trait anger score, Model 3 has the indicator for male, Model 4 has both covariates, and Model 5 has both covariates and their interaction. All models include an intercept term.
 
 
 \subsection{Results}
 
-The five models are estimated using Stan for \Sexpr{n_chains} chains of \Sexpr{f(n_iter, 0)} draws with the first \Sexpr{f(n_warmup, 0)} draws of each discarded, resulting in a total of
+The five models are estimated with Stan using \Sexpr{n_chains} chains of \Sexpr{f(n_iter, 0)} draws with the first \Sexpr{f(n_warmup, 0)} draws of each discarded, resulting in a total of
 \Sexpr{f(n_posterior,0)}
-kept posterior draws. The $\hat R$ convergence statistic was \Sexpr{f(max_rhat,2)} or less for all parameters and the log posterior across models. DIC, WAIC, and PSIS-LOO were computed on the conditional and marginal likelihoods.
+kept posterior draws.
+%The $\hat R$ convergence statistic was \Sexpr{#f(max_rhat,2)} or less for all parameters and the log posterior across models.
+Marginal DIC, WAIC, and PSIS-LOO were computed using adaptive quadrature to integrate out $\zeta$. Arbitrarily focusing on Model~4, the process described in the previous section was used to determine that \Sexpr{n_agq} nodes were sufficient to obtain an accurate approximation.
+All evaluations of the marginal likelihood that follow use this number of nodes.
 
-Adaptive quadrature was used to approximate the marginal likelihoods. Arbitrarily focusing on Model~4, the full data marginal log-likelihood, $\mathrm{lpd}_m$, was evaluated using \Sexpr{and(n_agq_try)} nodes to determine a sufficient number of adaptive quadrature nodes. Using the rule to select the smaller number of nodes when the difference in each of DIC, WAIC, and PSIS-LOO is less than .01, \Sexpr{n_agq} nodes were found to be sufficient. All evaluations of the marginal likelihood that follow use this number of nodes.
-
-From a frequentist perspective on generalized linear mixed models, there are $I-1$ unconstrained parameters in $\delta$, one for $\sigma$, and one parameter per element in $\lambda$. Meanwhile, each $\zeta_j$ would be marginalized out in maximum marginal likelihood estimation and so would not be counted. It follows that in this perspective
-Model~1 has 25 parameters,
-Models~2 and 3 have 26 parameters,
-Model~4 has 27 parameters, and
-Model~5 has 28 parameters.
-In contrast to these counts of model parameters, information criteria estimate the effective number of parameters. Table~\ref{tab:effn} provides these estimates across models for each of the information criteria. Results for marginal information criteria are close to the counts of model parameters. Estimated effective numbers of parameters for conditional information criteria are much greater because each $\zeta_j$ makes a contribution instead of the single contribution of $\sigma$. Depending on the informativeness of the prior distribution, the vector $\zeta$ will contribute between 1 (if the prior is absolutely informative) and $J$ (if totally uninformative) effective parameters.
+Table~\ref{tab:3-effn} provides the estimated effective number of parameters for each model and focus, as well as the count of parameters associated with either focus.
+The effective numbers of parameters are substantially less than the counts of parameters for conditional information criteria, owing mainly to the fact that each $zeta_j$, with its hierarchical prior, contributes less than one to the effective number of parameters.
+On the other hand, the values for marginal information criteria are close to the counts of model parameters.
+%Estimated effective numbers of parameters for conditional information criteria are much greater because each $\zeta_j$ makes a contribution instead of the single contribution of $\sigma$. Depending on the informativeness of the prior distribution, the vector $\zeta$ will contribute between 1 (if the prior is absolutely informative) and $J$ (if totally uninformative) effective parameters.
 
 \begin{table}[htb]
 \centering
 <<parameters, results = tex>>=
-keep <- c("dic", "waic", "looic", "p_dic", "p_waic", "p_loo")
-keep <- c(keep, paste0(keep, "_mcerror"))
-df <- subset(df_models, variable %in% keep)
-df$ic_type <- toupper(gsub("(p\\_|\\_mcerror)", "", df$variable))
-df$ic_type <- gsub("(LOO|LOOIC)", "PSIS-LOO", df$ic_type)
-df$variable <- gsub("(dic|waic|loo|looic|\\_)", "", df$variable)
-df$variable[df$variable == ""] <- "ic_value"
-df <- dcast(df, focus + model + ic_type ~ variable)
-df$ic_type <- factor(df$ic_type, c("DIC", "WAIC", "PSIS-LOO"))
-df$Model <- factor(df$model)
+# keep <- c(keep, paste0(keep, "_mcerror"))
+df <- subset(df_models, variable %in% c("p_dic", "p_waic", "p_loo"))
+df$Criterion <- toupper(gsub("(p\\_)", "", df$variable))
+df$Criterion <- gsub("(LOO|LOOIC)", "PSIS-LOO", df$Criterion)
+df$variable <- NULL
+df <- aggregate(value ~ focus + model + Criterion, df, mean)
 
-df_tab <- dcast(df, focus + ic_type ~ model, value.var = "p")
-names(df_tab) <- c("Focus", "IC", paste("Model", 1:5))
+marginal_pars <- c(25, 26, 26, 27, 28)
+conditional_pars <- c(25, 26, 26, 27, 28) - 1 + 316
+df_par_counts <- data.frame(focus = rep(c("Marginal", "Conditional"), each = 5),
+                            model = rep(1:5, times = 2),
+                            Criterion = rep("Count", 10),
+                            value = c(marginal_pars[1:5], conditional_pars[1:5]))
+df <- rbind(df, df_par_counts)
+df$Criterion <- factor(df$Criterion, c("DIC", "WAIC", "PSIS-LOO", "Count"))
+
+df_tab <- dcast(df, focus + Criterion ~ model)
+names(df_tab) <- c("Focus", "Criterion", paste("Model", 1:5))
 df_tab$Focus <- as.character(df_tab$Focus)
-df_tab$Focus[-c(1,4)] <- ""
+df_tab$Focus[-c(1,5)] <- ""
 print(xtable(df_tab),
-      hline.after = c(-1, 0, 3, 6),
+      hline.after = c(-1, 0, 4, 8),
       include.rownames = FALSE,
       floating = FALSE)
 @
-\caption{Estimated effective number of parameters for the five models using various information criteria.}
-\label{tab:effn}
+\caption{Estimated effective number of parameters $\hat p$) for the five models using various information criteria. The counts of parameters associated with each focus are also provided.}
+\label{tab:3-effn}
 \end{table}
 
-The time series bootstrap is used to obtain Monte Carlo error estimates for DIC and WAIC. The block size $S^\frac{1}{3} \approx \Sexpr{block_size}$ is chosen as the default and is compared against block sizes
-\Sexpr{and(block_sizes[block_sizes != block_size])}
-to ascertain how sensitive the estimated Monte Carlo error is to choice of block size. Further, to obtain some indication of the variability of the bootstrap results, the procedure is repeated for \Sexpr{n_brute_force_reps} independent MCMC simulations per block size.
-For comparison, estimates of Monte Carlo error are also obtained by repeating the MCMC simulation for the model and calculating DIC and WAIC \Sexpr{n_brute_force_reps} times.
-Figure~\ref{fig:blocksize} presents the resulting estimates of Monte Carlo error for conditional and marginal DIC and WAIC, obtained for Model~4. The bootstrap is not applied to to PSIS-LOO because PSIS-LOO is more computationally intensive than DIC or WAIC and so may require an unreasonable amount of time to bootstrap. For all information criteria considered, the estimated Monte Carlo errors do not appear to depend much on block size. Further, it may be seen that the estimated Monte Carlo errors are substantially smaller for the marginal forms of information criteria. In all cases, however, the bootstrap results underestimate the Monte Carlo error, based on comparison to the \Sexpr{n_brute_force_reps} independent MCMC simulations.
-
-\begin{figure}
-\begin{center}
-<<blocksize_plot, fig = TRUE>>=
-# Get SD for brute force DIC and WAIC
-df_brute_force_sd <- aggregate(value ~ focus + variable,
-                         subset(df_brute_force, variable %in% c("dic", "waic")),
-                         sd)
-names(df_brute_force_sd) <- c("focus", "variable", "brute_force")
-
-# Combine bootstrap results with brute force results
-df_mcerror_long <- melt(df_mcerror[, c("focus", "block_size", "dic", "waic")],
-                        id.vars = c("focus", "block_size"))
-df_mcerror_long <- merge(df_mcerror_long, df_brute_force_sd)
-df_mcerror_long$variable <- toupper(df_mcerror_long$variable)
-
-ggplot(df_mcerror_long) +
-  aes(x = block_size, y = value) +
-  geom_jitter(width = .5, height = 0) +
-  geom_hline(mapping = aes(yintercept = brute_force), lty = "dashed") +
-  facet_grid(~ variable + focus) +
-  xlab("Block size") +
-  ylab("Bootstrap Monte Carlo error estimate") +
-  scale_x_continuous(breaks = unique(df_mcerror_long$block_size),
-                     minor_breaks = NULL) +
-  my_theme
-@
-\end{center}
-\caption{Time series bootstrap Monte Carlo error estimates for information criteria values using block sizes \Sexpr{and(sort(unique(df_mcerror$block_size)))}. Each was estimated \Sexpr{n_block_size_reps} times to obtain some indication of the bootstrap variability. Results are shown for Model~4. A small amount of jitter is applied to the points. The dashed lines represent Monte Carlo error estimates obtained from \Sexpr{n_brute_force_reps} independent MCMC simulations. %Block size appears to have little effect on estimated Monte Carlo errors, and marginal forms of information criteria show substantially smaller estimated Monte Carlo errors than conditional forms.
-}
-\label{fig:blocksize}
-\end{figure}
-
-
-
-Figure~\ref{fig:mcerror} provides the estimates of marginal and conditional DIC, WAIC, and PSIS-LOO along with vertical lines indicating $\pm 2$ Monte Carlo errors from the time series bootstrap with a block size of \Sexpr{round(n_posterior^(1/3))}. For the conditional focus, all three of DIC, WAIC, and PSIS-LOO were lowest for Model 4. However, the magnitude of the estimated Monte Carlo errors renders this conclusion unreliable. Clearly, many more posterior draws would be required to reliably select a preferred model with the conditional focus. On the other hand, the marginal focus yields much smaller Monte Carlo errors, allowing for some confidence in preferring Model 4 for each criterion.
+Figure~\ref{fig:3-example-ic} provides the estimates of conditional and marginal DIC, WAIC, and PSIS-LOO. The different conditional information criteria differ from each other for any given model, though the three of them suggest the same ranking of models. Marginal WAIC provides nearly the same results as marginal PSIS-LOO, while values for marginal DIC are consistently less. The model rankings differ somewhat between the conditional and marginal focus, though small difference between competing models should not be over-interpreted due to the unknown degree of Monte Carlo error.
 
 \begin{figure}
 \begin{center}
 <<mcerror_plot, fig = TRUE>>=
+df <- subset(df_models, variable %in% c("dic", "waic", "looic"))
+df$Criterion <- toupper(df$variable)
+df$Criterion <- gsub("(LOO|LOOIC)", "PSIS-LOO", df$Criterion)
+df$Criterion <- factor(df$Criterion, c("DIC", "WAIC", "PSIS-LOO"))
 ggplot(df) +
-  aes(y = ic_value, ymin = ic_value - 2*mcerror, ymax = ic_value + 2*mcerror,
-      x = as.factor(model), color = ic_type, pch = ic_type) +
-  geom_linerange(position = position_dodge(width = .5)) +
-  geom_point(position = position_dodge(width = .5), size = 1.5) +
-  facet_wrap(~focus, nrow = 1, scale = "free_y") +
-  labs(pch = NULL, color = NULL, y = NULL, x = "Model") +
+  aes(y = value, x = as.factor(model)) +
+  geom_jitter(height = 0, width = .1, alpha = .5) +
+  facet_grid(focus ~ Criterion, scale = "free_y") +
+  labs(y = NULL, x = "Model") +
   my_theme +
   theme(panel.grid.minor.x = element_blank())
 @
 \end{center}
-\caption{Information criteria values for the five models with $\pm 2$ Monte Carlo errors indicated by vertical lines (not calculated for PSIS-LOO).}
-\label{fig:mcerror}
+\caption{Information criteria values for the five latent regression Rasch models by focus.}
+\label{fig:3-example-ic}
 \end{figure}
 
 <<mcerror_numbers>>=
 # For reporting in text, get ranges of IC values
-ic_range <- aggregate(ic_value ~ focus + ic_type, data = df,
-                      FUN = function(x) max(x) - min(x))
-ic_range_cond <- ic_range[ic_range$focus == "Conditional", "ic_value"]
-ic_range_marg <- ic_range[ic_range$focus == "Marginal", "ic_value"]
+# ic_range <- aggregate(value ~ focus + Criterion, data = df,
+#                       FUN = function(x) max(x) - min(x))
+# ic_range_cond <- ic_range[ic_range$focus == "Conditional", "value"]
+# ic_range_marg <- ic_range[ic_range$focus == "Marginal", "value"]
 
 # For reporting in text, get means of mc errors
-mcerror_mean <- aggregate(mcerror ~ focus + ic_type, data = df, FUN = mean)
-mcerror_mean_cond <- mcerror_mean[mcerror_mean$focus == "Conditional", "mcerror"]
-mcerror_mean_marg <- mcerror_mean[mcerror_mean$focus == "Marginal", "mcerror"]
+# mcerror_mean <- aggregate(mcerror ~ focus + ic_type, data = df, FUN = mean)
+# mcerror_mean_cond <- mcerror_mean[mcerror_mean$focus == "Conditional", "mcerror"]
+# mcerror_mean_marg <- mcerror_mean[mcerror_mean$focus == "Marginal", "mcerror"]
 @
-
-The conditional focus suffers from a narrower range of IC estimates (across models) coupled with larger Monte Carlo error. For the conditional focus, the ranges (maximums minus minimums) were
-\Sexpr{and(f(ic_range_cond))},
-for DIC, WAIC, and PSIS-LOO, respectively, compared to
-\Sexpr{and(f(ic_range_marg))}
-for the marginal focus. Meanwhile, on average the Monte Carlo errors for the conditional focus were
-\Sexpr{and(f(mcerror_mean_cond))}
-for DIC and WAIC, respectively, compared to
-\Sexpr{and(f(mcerror_mean_marg))}
-for the marginal focus. In general, the choice of conditional versus marginal focus should depend on the prediction inference being made, but in situations in which either focus is suitable, the marginal focus may be preferable for this reason.
 
 
 \section{Discussion}

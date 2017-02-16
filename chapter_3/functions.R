@@ -62,6 +62,7 @@ cll <- function(stan_fit = NULL, data_list, CFUN, draws = NULL, ll_par = NULL,
 
 }
 
+
 # Function to calculate DIC
 
 dic <- function(ll_obj) {
