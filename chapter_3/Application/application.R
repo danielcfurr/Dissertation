@@ -6,11 +6,11 @@ n_cores <- parallel::detectCores()
 n_repeats <- 10
 
 # Increase each node by 50% over last, rounding to odd number
-sim_nodes <- c(7, rep(NA, times = 2))
-for(i in 2:length(sim_nodes)) {
-  x <- floor(1.5*sim_nodes[i-1])
+n_agq_try <- c(7, rep(NA, times = 2))
+for(i in 2:length(n_agq_try)) {
+  x <- floor(1.5*n_agq_try[i-1])
   is_even <- x %% 2 == 0
-  sim_nodes[i] <- x + is_even
+  n_agq_try[i] <- x + is_even
 }
 
 monitor_pars <- c("delta_free", "theta", "sigma", "lambda_adj", "lp__")

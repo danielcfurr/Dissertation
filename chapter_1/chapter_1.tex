@@ -5,7 +5,12 @@
 \usepackage{caption}
 \usepackage{subcaption}
 \usepackage{amsmath}
-\usepackage{apacite}
+
+\usepackage[american]{babel}
+\usepackage{csquotes}
+\usepackage[backend=biber, style=apa]{biblatex}
+\DeclareLanguageMapping{american}{american-apa}
+\bibliography{../../../Documents/References/references.bib}
 
 \title{Posterior predictive model checking and cross-validation for explanatory item response models}
 \author{Daniel Furr}
@@ -16,27 +21,7 @@
 
 \begin{document}
 
-\input{./chapter_1/figs/keys.tex}
-
-\newcommand{\y}        {\mathbf{y}}
-\newcommand{\yip}      {{y_{ip}}}
-%\newcommand{\yi}      {{\mathbf{y}_{    i }}}
-%\newcommand{\yp}      {{\mathbf{y}_{     p}}}
-\newcommand{\x}        {\mathbf{x}_i}
-\newcommand{\X}        {\mathbf{X}}
-\newcommand{\w}        {\mathbf{w}_p}
-\newcommand{\W}        {\mathbf{W}}
-\newcommand{\D}        {\mathbf{D}}
-\newcommand{\N}[1]     {\mathrm{N}(#1)}
-\newcommand{\vbeta}    {\boldsymbol{\beta}}
-\newcommand{\vgamma}   {\boldsymbol{\gamma}}
-\newcommand{\vomega}   {\boldsymbol{\omega}}
-\newcommand{\vzeta}    {\boldsymbol{\zeta}}
-\newcommand{\vepsilon} {\boldsymbol{\epsilon}}
-\newcommand{\vdelta}   {\boldsymbol{\delta}}
-\newcommand{\vtheta}   {\boldsymbol{\theta}}
-%\newcommand{\thetafixp}   {\boldsymbol{\theta^\mathrm{fix}_p}}
-%\newcommand{\deltafixi}   {\boldsymbol{\delta^\mathrm{fix}_i}}
+\input{figs/keys.tex}
 
 \newcommand{\comment}[1]{{\footnotesize[\textit{#1}]}}
 
@@ -52,42 +37,42 @@
 
 \subsection{General formulation}
 
-A popular model for dichotomous item response data is the Rasch model \cite{Rasch1960a}:
+A popular model for dichotomous item response data is the Rasch model \parencite{Rasch1960a}:
 \begin{equation} \label{eq:base}
-	\Pr ( \yip | \theta_p, \delta_i) =
-	\frac {\exp(\theta_p - \delta_i)^\yip}
+	\Pr ( y_{ip} | \theta_p, \delta_i) =
+	\frac {\exp(\theta_p - \delta_i)^{y_{ip}}}
 	{1 + \exp(\theta_p - \delta_i)}
 ,\end{equation}
-where $y_{ip} = 1$ if person $p$ ($p = 1, \dotsc, P$) responded to item $i$ ($i = 1, \dotsc, I$) correctly and $y_{ip} = 0$ otherwise, $\theta_p$ is the ability parameter for person $p$, and $\delta_i$ is the difficulty parameter for item $i$. The individual instances of $\theta_p$ and $\delta_i$ may be collected into vectors $\vtheta$ and $\vdelta$, respectively. This is a ``descriptive'' item response model \cite{Wilson2004}; it fully accounts for abilities and difficulties (assuming the appropriateness of the model), but does not offer insight into the the person or item predictors associated with abilities and difficulties.
+where $y_{ip} = 1$ if person $p$ ($p = 1, \dotsc, P$) responded to item $i$ ($i = 1, \dotsc, I$) correctly and $y_{ip} = 0$ otherwise, $\theta_p$ is the ability parameter for person $p$, and $\delta_i$ is the difficulty parameter for item $i$. The individual instances of $\theta_p$ and $\delta_i$ may be collected into vectors $\theta$ and $\delta$, respectively. This is a ``descriptive'' item response model \parencite{Wilson2004}; it fully accounts for abilities and difficulties (assuming the appropriateness of the model), but does not offer insight into the the person or item predictors associated with abilities and difficulties.
 
 The model in Equation~\ref{eq:base} may be expanded to a ``person explanatory'' model by decomposing $\theta_p$ as
 \begin{equation} \label{eq:theta}
-	\theta_p = \mathbf{w}_p' \vgamma + \zeta_p
+	\theta_p = w_p' \gamma + \zeta_p
 ,\end{equation}
-where $\mathbf{w}_p$ is a row from the design matrix of person-related covariates $\mathbf{W}$, $\vgamma$ is a vector of parameters, and $\zeta_p$ is the residual person abilities. The above may be interpreted as a latent regression of abilities on $\mathbf{W}$. Henceforth, $\theta_p$ will be referred to as the composite ability, $\mathbf{w}_p' \vgamma$ the structured part of ability, and $\zeta_p$ the residual part. 
+where $w_p$ is a row from the design matrix of person-related covariates $W$, $\gamma$ is a vector of parameters, and $\zeta_p$ is the residual person abilities. The above may be interpreted as a latent regression of abilities on $W$. Henceforth, $\theta_p$ will be referred to as the composite ability, $w_p' \gamma$ the structured part of ability, and $\zeta_p$ the residual part. 
 
 Similarly, decomposing $\delta_i$ as
 \begin{equation} \label{eq:delta}
-	\delta_i = \mathbf{x}_i' \vbeta + \epsilon_i
+	\delta_i = x_i' \beta + \epsilon_i
 \end{equation}
-results in an ``item explanatory'' model, in which $\mathbf{x}_i$ is a row from the design matrix of item-related covariates $\mathbf{X}$, $\vbeta$ is a vector of parameters, and $\epsilon_i$ is the residual item difficulty. The above is then a latent regression of item difficulties on $\mathbf{X}$. In parallel with the preceding terminology for ability, $\delta_i$ will be referred to as the composite difficulty, $\mathbf{x}_i' \vbeta$ the structured part of difficulty, and $\epsilon_i$ the residual part. 
+results in an ``item explanatory'' model, in which $x_i$ is a row from the design matrix of item-related covariates $X$, $\beta$ is a vector of parameters, and $\epsilon_i$ is the residual item difficulty. The above is then a latent regression of item difficulties on $X$. In parallel with the preceding terminology for ability, $\delta_i$ will be referred to as the composite difficulty, $x_i' \beta$ the structured part of difficulty, and $\epsilon_i$ the residual part. 
 
 Equations~\ref{eq:base}, \ref{eq:theta}, and \ref{eq:delta} together form a ``doubly explanatory'' item response model, given that it incorporates covariates associated with both the person and item ``sides.'' Note that the model may still serve descriptive purpose as the composite abilities and difficulties remain a part of the model. The final step in formulating the model is to specify distributions for the residuals. Henceforth, normal distributions are assumed, 
 \begin{equation}
-	\zeta_p \sim \N{0, \sigma^2}
+	\zeta_p \sim N(0, \sigma^2)
 \end{equation}
 and
 \begin{equation}
-	\epsilon_i \sim \N{0, \tau^2}
+	\epsilon_i \sim N(0, \tau^2)
 ,\end{equation}
 though other choices could be considered. The sides of the model are specified in directly parallel ways, and much of the discussion that follows will make use of this point.
 
-The model is presented diagrammatically in Figure~\ref{fig:eirm-model}. In the diagram, the dependence on covariates $\mathbf{W}$ and $\mathbf{X}$ is suppressed. Parameters (loosely defined for the moment) are indicated by circles, and data are indicated by squares. The boxed regions indicate whether the parameters vary over persons, items or neither. The response data $\y$ of course varies over both.
+The model is presented diagrammatically in Figure~\ref{fig:eirm-model}. In the diagram, the dependence on covariates $W$ and $X$ is suppressed. Parameters (loosely defined for the moment) are indicated by circles, and data are indicated by squares. The boxed regions indicate whether the parameters vary over persons, items or neither. The response data $y$ of course varies over both.
 
 \begin{figure}[btp]
 	\centering
-	\input{./chapter_1/figs/eirm-model.tex}
-	\caption{The full model. Circles represent parameters and squares represent data. Person covariates $\mathbf{W}$ and item covariates $\mathbf{X}$ are ommitted.}
+	\input{figs/eirm-model.tex}
+	\caption{The full model. Circles represent parameters and squares represent data. Person covariates $W$ and item covariates $X$ are ommitted.}
 	\label{fig:eirm-model}
 \end{figure}
 
@@ -96,11 +81,11 @@ The model is presented diagrammatically in Figure~\ref{fig:eirm-model}. In the d
 
 In Bayesian methodology, the joint posterior distribution for the parameters is factorized by way of Bayes theorem:
 \begin{equation} \label{eq:bayes}
-	p(\vomega | \y) \propto
-	p(\vomega)
-	p(\y | \vomega)
+	p(\omega | y) \propto
+	p(\omega)
+	p(y | \omega)
 ,\end{equation}
-which indicates that the joint posterior distribution proportional to the product of the joint prior distribution and the likelihood. In the above, $\vomega$ is the set of model parameters. A taxonomy of parameters types is given below.
+which indicates that the joint posterior distribution proportional to the product of the joint prior distribution and the likelihood. In the above, $\omega$ is the set of model parameters. A taxonomy of parameters types is given below.
 \begin{enumerate}
 	\item \emph{Basic parameters}
 	are the foundational parameters. They are plugged into the likelihood directly or affect it indirectly through intermediate parameters. Priors are specified for them.
@@ -108,158 +93,158 @@ which indicates that the joint posterior distribution proportional to the produc
 		\item \emph{Exchangeable basic parameters} 
 		have hierarchical prior distributions. They are exchangeable draws from a distribution, the characteristics of which are determined by hyperparameters.
 		\item \emph{Non-exchangeable basic parameters}
-		have non-hierarchical (often non-informative) priors. They are not thought of as exchangeable or drawn from a distribution (except in the loose sense that there is a prior distribution).
+		have non-hierarchical (often non-informative) priors. They are not thought of as exchangeable or drawn from a distribution, except in the loose sense that there is a prior distribution.
 	\end{enumerate}
 	\item \emph{Intermediate parameters}
 	are composites built from basic parameters. They are plugged into the likelihood in place of basic parameters.
 	\item \emph{Hyperparameters}
 	are parameters for the estimated distributions for exchangeable basic parameters. These are not plugged into the likelihood but rather determine the prior distributions for the exchangeable parameters.
 \end{enumerate}
-The doubly descriptive model has a likelihood (Equation~\ref{eq:base}) based on intermediate parameters $\vtheta$ and $\vdelta$, which are in turn built from basic parameters $\vgamma$, $\vzeta$, $\vdelta$, and $\vepsilon$ (Equations~\ref{eq:theta} and \ref{eq:delta}). $\vgamma$ and $\vdelta$ are non-exchangable basic parameters, while $\vzeta$ and $\vepsilon$ are exchangeable basic parameters whose priors depend on hyperparameters $\sigma$ and $\tau$, respectively.
+The doubly descriptive model has a likelihood (Equation~\ref{eq:base}) based on intermediate parameters $\theta$ and $\delta$, which are in turn built from basic parameters $\gamma$, $\zeta$, $\delta$, and $\epsilon$ (Equations~\ref{eq:theta} and \ref{eq:delta}). $\gamma$ and $\delta$ are non-exchangable basic parameters, while $\zeta$ and $\epsilon$ are exchangeable basic parameters whose priors depend on hyperparameters $\sigma$ and $\tau$, respectively.
 
 The prior distribution in Equation~\ref{eq:bayes} may be rewritten as
 \begin{equation} \label{eq:prior}
-	p(\vomega) =
-	p(\vgamma) p(\sigma)
+	p(\omega) =
+	p(\gamma) p(\sigma)
 	\left [ 
 		\prod_{p=1}^P p(\zeta_p | \sigma) 
 	\right ]
-	p(\vbeta) p(\tau)
+	p(\beta) p(\tau)
 	\left [ 
 		\prod_{i=1}^I p(\epsilon_i | \tau) 
 	\right ]
 ,\end{equation}
-assuming independent priors are specified, which is the usual case. No prior is included for $\vtheta$ and $\vdelta$ as they are wholly determined from the basic parameters. 
-%The joint prior $p(\vgamma, \vbeta, \tau, \sigma, \vzeta, \vepsilon)$ may be written as the product of individual priors if the priors are specified as independent, which is the usual case. 
+assuming independent priors are specified, which is the usual case. No prior is included for $\theta$ and $\delta$ as they are wholly determined from the basic parameters. 
+%The joint prior $p(\gamma, \beta, \tau, \sigma, \zeta, \epsilon)$ may be written as the product of individual priors if the priors are specified as independent, which is the usual case. 
 The likelihood part of Equation~\ref{eq:bayes} may be rewritten in terms of basic parameters as
 \begin{equation} \label{eq:bayes-likelihood-alt}
-	p(\y | \vomega) =
-	p(\y | \W, \X, \vgamma, \vbeta, \vzeta, \vepsilon) =
+	p(y | \omega) =
+	p(y | W, X, \gamma, \beta, \zeta, \epsilon) =
 	\prod_{p=1}^P \prod_{i=1}^I 
-	\Pr(\yip | \w, \x, \zeta_p, \vgamma, \epsilon_i, \vbeta)
+	\Pr(y_{ip} | w_p, x_i, \zeta_p, \gamma, \epsilon_i, \beta)
 \end{equation}
 or in terms of intermediate parameters as
 \begin{equation} \label{eq:bayes-likelihood}
-	p(\y | \vomega) =
-	p(\y | \vtheta, \vdelta) =
-	\prod_{p=1}^P \prod_{i=1}^I \Pr(\yip | \theta_p, \delta_i)
+	p(y | \omega) =
+	p(y | \theta, \delta) =
+	\prod_{p=1}^P \prod_{i=1}^I \Pr(y_{ip} | \theta_p, \delta_i)
 .\end{equation}
-Given that both the prior and the likelihood may be specified ignoring the intermediate parameters $\vtheta$ and $\vdelta$, it is clear that they are redundant. For many applications, however, they have useful interpretations. Further, the posterior distributions of $\vtheta$ and $\vdelta$ can be estimated easily using the posterior draws of the basic parameters.
+Given that both the prior and the likelihood may be specified ignoring the intermediate parameters $\theta$ and $\delta$, it is clear that they are redundant. For many applications, however, they have useful interpretations. Further, the posterior distributions of $\theta$ and $\delta$ can be estimated easily using the posterior draws of the basic parameters.
 
-%\comment{In practice (meaning in the results of Monte Carlo simulation of the proposed model), $\vtheta$ and $\vdelta$ are in the joint posterior. How should the notation reflect this fact? Link this topic to hierarchical centering.}
+%\comment{In practice (meaning in the results of Monte Carlo simulation of the proposed model), $\theta$ and $\delta$ are in the joint posterior. How should the notation reflect this fact? Link this topic to hierarchical centering.}
 
-The posterior for a single parameter may be isolated by integrating the joint posterior over the other parameters. Let $\D = \{ \y, \W, \X \}$ represent the full data. Then,
+The posterior for a single parameter may be isolated by integrating the joint posterior over the other parameters. Let $D = \{ y, W, X \}$ represent the full data. Then,
 \begin{equation}
-	p(\sigma | \D) = 
+	p(\sigma | D) = 
 	\int \!\!\! \int \!\!\! \int \!\!\! \int \!\!\! \int
-		p(\vzeta, \vgamma, \sigma, \vepsilon, \vbeta, \tau | \D) 
-	~d \vzeta d \vgamma d \vepsilon d \vbeta d \tau
+		p(\zeta, \gamma, \sigma, \epsilon, \beta, \tau | D) 
+	~d \zeta d \gamma d \epsilon d \beta d \tau
 \end{equation}
-is the posterior for the standard deviation of the ability residuals. The mean and standard deviation of the marginal posterior for a parameter may be taken to represent a point estimate and standard error. Further, the joint posterior of a subset of parameters, $p(\vbeta, \zeta_p, \vgamma, \epsilon_i | \D)$ for example, likewise may be obtained by integrating out the other parameters. Despite the high-dimensional integral involved, these quantities are readily available from Monte Carlo simulation by simply ignoring the draws for the parameters to be integrated out, and so no special effort is required to obtain them.
+is the posterior for the standard deviation of the ability residuals. The mean and standard deviation of the marginal posterior for a parameter may be taken to represent a point estimate and standard error. Further, the joint posterior of a subset of parameters, $p(\beta, \zeta_p, \gamma, \epsilon_i | D)$ for example, likewise may be obtained by integrating out the other parameters. Despite the high-dimensional integral involved, these quantities are readily available from Monte Carlo simulation by simply ignoring the draws for the parameters to be integrated out, and so no special effort is required to obtain them.
 
-Some alternative approaches to specifying the model bear mentioning. First, the model could equivalently be specified using hierarchical centering \cite{gelfand1995efficient} by replacing the prior with
+Some alternative approaches to specifying the model bear mentioning. First, the model could equivalently be specified using hierarchical centering \parencite{gelfand1995efficient} by replacing the prior with
 \begin{equation}
-	p(\vomega) =
-	p(\vgamma) p(\sigma)
+	p(\omega) =
+	p(\gamma) p(\sigma)
 	\left [ 
-		\prod_{p=1}^P p(\theta_p | \w, \vgamma, \sigma)
+		\prod_{p=1}^P p(\theta_p | w_p, \gamma, \sigma)
 	\right ]
-	p(\vbeta) 	p(\tau)
+	p(\beta) 	p(\tau)
 	\left [ 
-		\prod_{i=1}^I p(\delta_i | \x, \vbeta, \tau) 
+		\prod_{i=1}^I p(\delta_i | x_i, \beta, \tau) 
 	\right ]
 \end{equation}
 where 
-$p(\theta_p | \w, \vgamma, \sigma) = \N{\w \vgamma, \sigma^2}$ and
-$p(\delta_i | \x, \vbeta, \tau)    = \N{\x \vbeta, \tau^2}$, 
-respectively. The likelihood is specified as in Equation~\ref{eq:bayes-likelihood}, and $\vzeta$ and $\vepsilon$ are omitted altogether. Depending on the algorithm used for Monte Carlo simulation, this may improve the efficiency.
+$p(\theta_p | w_p, \gamma, \sigma) = N(w_p \gamma, \sigma^2)$ and
+$p(\delta_i | x_i, \beta, \tau)    = N(x_i \beta, \tau^2)$, 
+respectively. The likelihood is specified as in Equation~\ref{eq:bayes-likelihood}, and $\zeta$ and $\epsilon$ are omitted altogether. Depending on the algorithm used for Monte Carlo simulation, this may improve the efficiency.
 %With hierarchical models, the distinction between prior and likelihood is somewhat arbitrary. The priors for $\zeta_p$ and $\epsilon_i$ in Equation~\ref{eq:prior} may be considered part of the prior, in which case they may be thought of as ``empirical'' or ``estimated'' priors. Alternatively, they may be considered part of the likelihood, in which case Equation~\ref{eq:bayes-likelihood-alt} may be rewritten as
-Second, a likelihood may be chosen that is marginal in regards to $\vzeta$ and $\vepsilon$:
+Second, a likelihood may be chosen that is marginal in regards to $\zeta$ and $\epsilon$:
 \begin{equation} \label{eq:marginal-likelihood}
-	p(\y | \vgamma, \vbeta, \sigma, \tau) =
+	p(y | \gamma, \beta, \sigma, \tau) =
 	\iint
 		\prod_{p=1}^P \prod_{i=1}^I 
-		\Pr(\yip | \zeta_p, \vgamma, \epsilon_i, \vbeta)
+		\Pr(y_{ip} | \zeta_p, \gamma, \epsilon_i, \beta)
 		p(\zeta_p | \sigma)
 		p(\epsilon_i | \tau)
 	~d \zeta_p d \epsilon_i
 .\end{equation}
-The residuals $\zeta_p$ and $\epsilon_i$ are integrated out, and they are not included in the prior, which is simply $p(\vgamma) p(\sigma) p(\vbeta) p(\tau)$.
+The residuals $\zeta_p$ and $\epsilon_i$ are integrated out, and they are not included in the prior, which is simply $p(\gamma) p(\sigma) p(\beta) p(\tau)$.
 
 %\comment{I find this discussion awkward. If both forms of the likelihood (marginal and conditional) get to live in the Bayes encampment, than discussion of frequentist and Bayes differences get muddled. This is especially true of the later discussion about what get called an estimate versus what is called a prediction. It's a prediction if it wasn't estimated, so inference for $\zeta_p$ is a prediction if the likelihood is marginal, whether or not we're standing with the frequentist and Bayesians. A smaller point: Do Bayesians fit models using marginal likelihoods? Does that work with Monte Carlo simulation? Or is it something that is occasionally mentioned but not a part of practice? If so (and I don't know), it may not belong in the Bayesian section. Or it could be that the distinction between types of likelihood is not so much a Frequenist vs Bayesian issue.}
 
 
 \subsection{Frequentist modeling approach}
 
-In the ``frequentist'' approach, only the non-exchangeable basic parameters ($\vgamma$ and  $\vbeta$) and the hyperparameters ($\sigma$ and $\tau$) are treated as parameters to be estimated. The likelihood is specified as in Equation~\ref{eq:marginal-likelihood}, in which the probability of a response is marginal over the distributions for person and item residuals. Point estimates $\hat\vgamma$, $\hat\sigma$, $\hat\vbeta$, and $\hat\tau$ are obtained by a process that maximizes this likelihood.
+In the ``frequentist'' approach, only the non-exchangeable basic parameters ($\gamma$ and  $\beta$) and the hyperparameters ($\sigma$ and $\tau$) are treated as parameters to be estimated. The likelihood is specified as in Equation~\ref{eq:marginal-likelihood}, in which the probability of a response is marginal over the distributions for person and item residuals. Point estimates $\hat\gamma$, $\hat\sigma$, $\hat\beta$, and $\hat\tau$ are obtained by a process that maximizes this likelihood.
 
-Within this framework, the exchangeable parameters $\vzeta$ and $\vepsilon$ are called latent variables or random effects because parameters cannot have distributions. Rather than obtain direct estimates for random effects, marginal maximum likelihood estimation obtains estimates for the parameters of their distributions, in this case, $\hat \sigma$ and $\hat\tau$. The non-exchangeable basic parameters $\vgamma$ and $\vbeta$ are sometimes referred to as ``fixed-effects.''
+Within this framework, the exchangeable parameters $\zeta$ and $\epsilon$ are called latent variables or random effects because parameters cannot have distributions. Rather than obtain direct estimates for random effects, marginal maximum likelihood estimation obtains estimates for the parameters of their distributions, in this case, $\hat \sigma$ and $\hat\tau$. The non-exchangeable basic parameters $\gamma$ and $\beta$ are sometimes referred to as ``fixed-effects.''
 \comment{``Can choose whether to treat $\zeta_p$ or $\epsilon_i$ as latent variables (random effects) or just consider their marginal likelihood, for example, to just get a covariance structure.'' Ref: Molenberghs and Verbeke. Hard to find because they wrote a million articles together.}
 
 A model of this kind may be formulated in the generalized linear mixed model framework. The response variable, conditional on covariates and so-called random effects, is specified as arising from a Bernoulli distribution: 
 \begin{equation}
-	y_{ip} | \w, \x, \zeta_p, \epsilon_i \sim \mathrm{Bernoulli}(\pi_{ip})
+	y_{ip} | w_p, x_i, \zeta_p, \epsilon_i \sim \mathrm{Bernoulli}(\pi_{ip})
 .\end{equation}
 Then the model may be written in terms of an inverse link function
 \begin{equation}
 	\pi_{ip} = 
-	\Pr(\yip = 1 | \w, \x, \zeta_p, \epsilon_i) =
+	\Pr(y_{ip} = 1 | w_p, x_i, \zeta_p, \epsilon_i) =
 	\mathrm{logit}^{-1}[\eta_{ip}]
 \end{equation}
 and a linear predictor
 \begin{equation}
 	\eta_{ip} =
-	(\mathbf{w}_p'\vgamma + \zeta_p) -
-	(\mathbf{x}_i'\vbeta + \epsilon_i)
+	(w_p'\gamma + \zeta_p) -
+	(x_i'\beta + \epsilon_i)
 .\end{equation}
-Because the random-effects $\zeta_p$ and $\epsilon_i$ are not nested, the model may be described as a crossed-mixed effects model. Such a model is difficult to estimate efficiently via marginal maximum likelihood because the integrals in Equation~\ref{eq:mml-likelihood} do not factorize as they do with nested random effects. \cite{}. The result is an $I \times P$ dimensional integral, though \citeA{rasbash1994efficient} describe a means of reducing this to an $I + 1$ dimensional integral.
+Because the random-effects $\zeta_p$ and $\epsilon_i$ are not nested, the model may be described as a crossed-mixed effects model. Such a model is difficult to estimate efficiently via marginal maximum likelihood because the integrals in Equation~\ref{eq:mml-likelihood} do not factorize as they do with nested random effects. The result is an $I \times P$ dimensional integral, though \textcite{rasbash1994efficient} describe a means of reducing this to an $I + 1$ dimensional integral.
 
-%double integration over the latent distributions (see Equation~\ref{eq:mml-likelihood}). The Laplace approximation may be employed to make the math tractable, but this approach has known shortcomings \cite{Joe2008}.
+%double integration over the latent distributions (see Equation~\ref{eq:mml-likelihood}). The Laplace approximation may be employed to make the math tractable, but this approach has known shortcomings \parencite{Joe2008}.
 
 %Though not directly estimated, post-hoc estimates for $\hat\zeta_p$ and $\hat\epsilon_i$ may be obtained by finding the mean or mode of $p(\yp|\zeta_p) p(\zeta_p|\hat\sigma)$ or $p(\yi|\epsilon_i) p(\epsilon_i|\hat\tau)$, which are referred to as ``empirical Bayes'' estimates. Standard errors are available for these, though they are calculated as though the parameter estimates are known, rather than random, quantities.
 %
 %Also available only in post-analysis are estimates
-%$\hat\theta_p = \mathbf{w}_p' \hat\vgamma + \hat\zeta_p$ and
-%$\hat\delta_i = \mathbf{x}_i' \hat\vbeta + \hat\epsilon_i$,
+%$\hat\theta_p = w_p' \hat\gamma + \hat\zeta_p$ and
+%$\hat\delta_i = x_i' \hat\beta + \hat\epsilon_i$,
 %where $\hat\zeta_p$ and $\hat\epsilon_i$ are empirical Bayes estimates. Standard errors are available for these quantities, though they also are calculated as if the parameter estimates are known quantities.
 
 
 \subsection{Special cases}
 \label{sec:special-cases}
 
-Many dichotomous item response models are special cases of the doubly explanatory model that arise from restrictions placed on the composite abilities and difficulties. For example, the variant of the Rasch model \cite{Rasch1960a} associated with marginal maximum likelihood estimation \cite{bock1981marginal} can be written as
+Many dichotomous item response models are special cases of the doubly explanatory model that arise from restrictions placed on the composite abilities and difficulties. For example, the variant of the Rasch model \parencite{Rasch1960a} associated with marginal maximum likelihood estimation \parencite{bock1981marginal} can be written as
 \begin{equation}
-	\Pr ( \yip | \theta_p, \delta_i) =
-	\frac {\exp(\theta_p - \delta_i)^\yip}
+	\Pr ( y_{ip} | \theta_p, \delta_i) =
+	\frac {\exp(\theta_p - \delta_i)^{y_{ip}}}
 	{1 + \exp(\theta_p - \delta_i)}
 \end{equation}
 \begin{equation}
 	\theta_p = \zeta_p
 \end{equation}
 \begin{equation}
-	\delta_i = \x' \vbeta
+	\delta_i = x_i' \beta
 ,\end{equation}
-where $\X$ is an $I \times I$ identity matrix ($\mathbf{I}_I$) and $\vbeta$ is a vector of length $I$, such that $\delta_i = \beta_i$. In other words, $\theta_p$ is set equal to the ability residuals, and $\delta_i$ is set equal to the (unstructured) structural part.
+where $X$ is an $I \times I$ identity matrix ($I_I$) and $\beta$ is a vector of length $I$, such that $\delta_i = \beta_i$. In other words, $\theta_p$ is set equal to the ability residuals, and $\delta_i$ is set equal to the (unstructured) structural part.
 
 In the Bayesian approach, the posterior for this Rasch model variant is given by
 \begin{equation}
-	p(\vtheta, \sigma, \vdelta | \y) \propto
+	p(\theta, \sigma, \delta | y) \propto
 	\left [ 
-		p(\vdelta) 	p(\sigma)
+		p(\delta) 	p(\sigma)
 		\prod_{p=1}^P p(\theta_p | \sigma) 
 	\right ]
 	\left [ 
 		\prod_{p=1}^P \prod_{i=1}^I 
-		\Pr ( \yip | \theta_p, \delta_i) 
+		\Pr ( y_{ip} | \theta_p, \delta_i) 
 	\right ]
 ,\end{equation}
 in which the left hand bracketed quantity is the prior and and the right hand quantity is the likelihood. The marginal likelihood for the frequentist approach is
 \begin{equation}
-	p(\y | \sigma, \vdelta) =
+	p(y | \sigma, \delta) =
 	\prod_{p=1}^P
 	\int
 		\prod_{i=1}^I 
-		\Pr(\yip | \theta_p, \delta_i)
+		\Pr(y_{ip} | \theta_p, \delta_i)
 		p(\theta_p | \sigma)
 	~d \theta_p
 .\end{equation}
@@ -271,147 +256,175 @@ The single dimensional integration is simpler than the $I \times P$ dimensional 
 		\hline
 		Model	& $\theta_p$ & $\delta_i$ & Notes \\ \hline
 		MML Rasch
-			& $\zeta_p$ & $\mathbf{x}_i'\vbeta$ & $\mathbf{X} = \mathbf{I}_I$ \\ 
+			& $\zeta_p$ & $x_i'\beta$ & $X = I_I$ \\ 
 		JML Rasch
-			& $\mathbf{w}_p' \vgamma$ & $\mathbf{x}_i'\vbeta$ & $\mathbf{W} = \mathbf{I}_{P-1}$, 
-			                                                    $\mathbf{X} = \mathbf{I}_I$ \\ 
+			& $w_p' \gamma$ & $x_i'\beta$ & $W = I_{P-1}$, $X = I_I$ \\ 
 		Random item Rasch
 			& $\zeta_p$ & $\epsilon_i$ &  \\ 
 		Latent regression
-			& $\mathbf{w}_p' \vgamma + \zeta_p$ & $\mathbf{x}_i'\vbeta$ & $\mathbf{X} = \mathbf{I}_I$ \\ 
+			& $w_p' \gamma + \zeta_p$ & $x_i'\beta$ & $X = I_I$ \\ 
 		Linear logistic test
-			& $\zeta_p$ & $\mathbf{x}_i'\vbeta$ &  \\ 
+			& $\zeta_p$ & $x_i'\beta$ &  \\ 
 		Linear logistic test with error
-			& $\zeta_p$ & $\mathbf{x}_i'\vbeta + \epsilon_i$ &  \\ 
+			& $\zeta_p$ & $x_i'\beta + \epsilon_i$ &  \\ 
 		Doubly explanatory
-			& $\mathbf{w}_p' \vgamma + \zeta_p$ &  $\mathbf{x}_i'\vbeta + \epsilon_i$ & \\
+			& $w_p' \gamma + \zeta_p$ &  $x_i'\beta + \epsilon_i$ & \\
 		\hline
 	\end{tabular}
 	\caption{Specification of several special cases.}
 	\label{tab:special-cases}
 \end{table}
 
-Other special cases arise from different choices of restrictions placed on the composite abilities and difficulties, and these are summarized in Table~\ref{tab:special-cases}. The variant of the Rasch model associated with joint maximum likelihood estimation \cite<e.g.,>{embretson2000item} includes only the structured parts of ability and difficulty with identity matrices for $\mathbf{W}$ and $\mathbf{X}$ (one difficulty or ability parameter must be constrained for identifiability). In contrast, the random item Rasch model \cite<e.g.,>{DeBoeck2008} has only the residual parts for both sides (a model intercept must be added). The latent regression item response model \cite{Mislevy1985, Adams1997b} includes the both parts of the composite ability and the structured part of item difficulty, where $\mathbf{X}$ is an identity matrix. The linear logistic test model (LLTM) \cite{Fischer1973}, has the residual part for ability and the structured part for difficulty. Its extension, the linear logistic test model with error (LLTM-E) \cite<e.g.,>{mislevy1988exploiting, Janssen2004}, adds an item difficulty residual. 
+Other special cases arise from different choices of restrictions placed on the composite abilities and difficulties, and these are summarized in Table~\ref{tab:special-cases}. The variant of the Rasch model associated with joint maximum likelihood estimation \parencite[e.g.,]{embretson2000item} includes only the structured parts of ability and difficulty with identity matrices for $W$ and $X$ (one difficulty or ability parameter must be constrained for identifiability). In contrast, the random item Rasch model \parencite[e.g.,]{DeBoeck2008} has only the residual parts for both sides (a model intercept must be added). The latent regression item response model \parencite{Mislevy1985, Adams1997b} includes the both parts of the composite ability and the structured part of item difficulty, where $X$ is an identity matrix. The linear logistic test model (LLTM) \parencite{Fischer1973}, has the residual part for ability and the structured part for difficulty. Its extension, the linear logistic test model with error (LLTM-E) \parencite[e.g.,]{mislevy1988exploiting, Janssen2004}, adds an item difficulty residual. 
 
 
 \section{Estimated and predicted quantities}
 
-Several quantities from the fitted model may be of interest. At the macro-level, $\vgamma$ represents the effects of the person covariates, and $\W \vgamma$ together with $\sigma$ describes the conditional distribution for person abilities. Likewise, $\vbeta$ represents the effects of the item covariates, and $\X \vbeta$ together with $\tau$ describes the conditional distribution for item difficulties. Depending on the choice of either a frequentist and Bayesian framework, the maximum likelihood estimates $\hat \vgamma$ and $\hat \vbeta$ or posterior distributions $p(\vgamma | \D)$ and $p(\vbeta | \D)$ will be obtained for these parameters.
+Several quantities from the fitted model may be of interest. At the macro-level, $\gamma$ represents the effects of the person covariates, and $W \gamma$ together with $\sigma$ describes the conditional distribution for person abilities. Likewise, $\beta$ represents the effects of the item covariates, and $X \beta$ together with $\tau$ describes the conditional distribution for item difficulties. Depending on the choice of either a frequentist and Bayesian framework, the maximum likelihood estimates $\hat \gamma$ and $\hat \beta$ or posterior distributions $p(\gamma | D)$ and $p(\beta | D)$ will be obtained for these parameters.
 
-For some applications, such as measurement ``per se'' and model assessment, the individual persons and items may be of interest. In this case, focus will be placed on $\vtheta$, $\vdelta$, $\vzeta$, and $\vepsilon$. The intermediate parameters $\vtheta$ and $\vdelta$ will be of interest for measurement per se, while the residuals $\vzeta$ and $\vepsilon$ will be useful for model assessment. These are within-sample quantities; that is, the estimation sample contains a person $p$ who is associated with $\zeta_p$ and $\theta_p$ and also an item $i$ that is associated with $\epsilon_i$ and $\delta_i$. 
+For some applications, such as measurement ``per se'' and model assessment, the individual persons and items may be of interest. In this case, focus will be placed on $\theta$, $\delta$, $\zeta$, and $\epsilon$. The intermediate parameters $\theta$ and $\delta$ will be of interest for measurement per se, while the residuals $\zeta$ and $\epsilon$ will be useful for model assessment. These are within-sample quantities; that is, the estimation sample contains a person $p$ who is associated with $\zeta_p$ and $\theta_p$ and also an item $i$ that is associated with $\epsilon_i$ and $\delta_i$. 
 
-There may be a (real or hypothetical) person $p'$ who is not represented in the estimation data. This out-of-sample person $p'$ has a covariate vector $\mathbf{w}_{p'}$ and is associated with parameters $\tilde \zeta_{p'}$ and $\tilde \theta_{p'}$, none of which play a role in fitting the model. Likewise, an out-of-sample item $i'$ associated with $\mathbf{w}_{p'}$, $\tilde \epsilon_{i'}$, and $\tilde \delta_{i'}$ may be envisioned.
+There may be a (real or hypothetical) person $p'$ who is not represented in the estimation data. This out-of-sample person $p'$ has a covariate vector $w_{p'}$ and is associated with parameters $\tilde \zeta_{p'}$ and $\tilde \theta_{p'}$, none of which play a role in fitting the model. Likewise, an out-of-sample item $i'$ associated with $w_{p'}$, $\tilde \epsilon_{i'}$, and $\tilde \delta_{i'}$ may be envisioned.
 
-Inferences for the within-sample quantities $\theta_p$, $\delta_i$, $\zeta_p$, and $\epsilon_i$ are called predictions in the frequentist framework because they are random quantities. Such inferences are called estimates in a Bayesian setting because they are either a part of the posterior or obtainable from the posterior. \comment{Not sure the ``because'' is correct, but I think some explanation is needed. For example, $\vzeta$ is not directly available from the posterior if a marginal likelihood approach is used. Will have to read up on the specifics.} Inferences for the out-of-sample quantities $\tilde \theta_{p'}$, $\tilde \delta_{i'}$, $\tilde \zeta_{p'}$, and $\tilde \epsilon_{i'}$ and are considered predictions in either case.
+Inferences for the within-sample quantities $\theta_p$, $\delta_i$, $\zeta_p$, and $\epsilon_i$ are called predictions in the frequentist framework because they are random quantities not directly estimated from the model. Such inferences are called estimates in a Bayesian setting because they are obtainable from the posterior. Inferences for the out-of-sample quantities $\tilde \theta_{p'}$, $\tilde \delta_{i'}$, $\tilde \zeta_{p'}$, and $\tilde \epsilon_{i'}$ and are considered predictions in either case.
 
 Lastly, inferences may be made regarding new responses, which are always considered predictions. A new response may be conceived as arising from a within-sample person-item pair, indicated by $\tilde y_{ip}$. This is, in other words, simply the model-predicted response for a within-sample observation. Several possibilities exist for out-of-sample responses: $\tilde y_{i'p}$ represents a new response from a within-sample person to an out-of-sample item, $\tilde y_{ip'}$ represents a new response from an out-of-sample person to a within-sample item, and $\tilde y_{i'p'}$ represents a totally out-of-sample response. Predictions for out-of-sample responses are termed forecasting in a longitudinal setting.
 
 
 \subsection{Inferences for within-sample persons and items}
 
-If the doubly explanatory model is estimated using the Bayesian estimation approach outlined above, posterior distributions for both the composite abilities, $p(\theta_p | \D)$, and residual abilities, $p(\zeta_p | \D)$, will be available. Likewise, posteriors for the composite item difficulties, $p(\delta_i | \D)$, and residual item difficulties, $p(\epsilon_i | \D)$, will be available. 
+If the doubly explanatory model is estimated using the Bayesian estimation approach outlined above, posterior distributions for both the composite abilities, $p(\theta_p | D)$, and residual abilities, $p(\zeta_p | D)$, will be available. Likewise, posteriors for the composite item difficulties, $p(\delta_i | D)$, and residual item difficulties, $p(\epsilon_i | D)$, will be available. 
 
-The posterior predictive distribution \cite{rubin1984bayesianly} for new a response $\tilde y_{ip}$ from a within-sample person-item pair, in terms of intermediate parameters, is
+The posterior predictive distribution \parencite{rubin1984bayesianly} for new a response $\tilde y_{ip}$ from a within-sample person-item pair, in terms of intermediate parameters, is
 \begin{equation}
-	p(\tilde y_{ip} | \D) =
+	p(\tilde y_{ip} | D) =
 	\iint
 		\Pr (\tilde y_{ip} | \theta_p, \delta_i)
-		p(\theta_p, \delta_i | \D)
+		p(\theta_p, \delta_i | D)
 	~d\theta_p d\delta_i
 ,\end{equation}
 or equivalently, in terms of basic and hyperparameters is
 \begin{equation} \label{eq:yrep-post}
-	p(\tilde y_{ip} | \D;  \zeta_p, \epsilon_i) =
+	p(\tilde y_{ip} | D;  \zeta_p, \epsilon_i) =
 	\iiiint
-		\Pr (\tilde y_{ip} | \vgamma, \zeta_p, \vbeta, \delta_i)
-		p(\vgamma, \zeta_p, \vbeta, \delta_i | \D)
-	~d\vgamma d\zeta_p d\vbeta d\delta_i
+		\Pr (\tilde y_{ip} | \gamma, \zeta_p, \beta, \delta_i)
+		p(\gamma, \zeta_p, \beta, \delta_i | D)
+	~d\gamma d\zeta_p d\beta d\delta_i
 .\end{equation}
 This is depicted in Figure~\ref{subfig:ppmc-same-both}. On the left side is a graphical representation of the model, similar to the one shown earlier, and on the right side is a shaded region for out-of-sample predictions. The diagram makes clear that $\tilde y_{ip}$ will closely resemble $y_{ip}$ because both arise from the same $\theta_p$ and $\delta_i$, assuming the correctness of the model.
+
+\begin{figure}[btp]
+	\centering
+	\begin{subfigure}[b]{.4\textwidth}
+		\input{figs/ppmc-same-both.tex}
+		\caption{Within-sample persons and items}
+		\label{subfig:ppmc-same-both}
+	\end{subfigure}
+	~
+	\begin{subfigure}[b]{.4\textwidth}
+		\input{figs/ppmc-new-both.tex}
+		\caption{Out-of-sample persons and items}
+		\label{subfig:ppmc-new-both}
+	\end{subfigure}
+	~
+	\begin{subfigure}[b]{.4\textwidth}
+		\input{figs/ppmc-new-theta.tex}
+		\caption{Out-of-sample persons, within-sample items}
+		\label{subfig:ppmc-new-persons}
+	\end{subfigure}
+	~
+	\begin{subfigure}[b]{.4\textwidth}
+		\input{figs/ppmc-new-delta.tex}
+		\caption{Within-sample persons, out-of-sample items}
+		\label{subfig:ppmc-new-items}
+	\end{subfigure}
+	\caption{Diagrams for generating predictive distributions of various forms. Circles represent parameters and squares represent data. The shaded region indicates predictive quantities that are not involved in the estimation. Covariates $W$ and $X$ are omitted.}
+	\label{fig:ppmc-models}
+\end{figure}
 
 
 \subsection{Inferences for out-of-sample persons and items}
 
 The predictive distribution for the residual ability for an out-of-sample person is
 \begin{equation} \label{eq:zeta-mixed}
-	p(\tilde \zeta_{p'} | \D) = 
+	p(\tilde \zeta_{p'} | D) = 
 	\int
 		p(\tilde \zeta_{p'} | \sigma)
-		p(\sigma | \D)
+		p(\sigma | D)
 	~d\sigma
 ,\end{equation}
-where $\tilde \zeta_{p'}$ indicates the new residual. This is referred to as mixed predictive distribution \cite{Gelman1996}, as $\tilde \zeta_{p'}$ is drawn from its conditional prior distribution given $\sigma$ and $\sigma$ is drawn from its posterior. The mixed predictive distribution for a new composite ability is denoted by $p(\tilde \theta_{p'} | \D)$, which is a function of 
-	$p(\vgamma, \tilde \zeta_{p'} | \D) = 
-	\int p(\tilde \zeta_{p'} | \sigma) p(\vgamma, \sigma | \D) ~d \sigma$
-and the covariate vector $\w$. \comment{This is vague but at least correct, I think.} 
+where $\tilde \zeta_{p'}$ indicates the new residual. This is referred to as mixed predictive distribution \parencite{Gelman1996}, as $\tilde \zeta_{p'}$ is drawn from its prior and $\sigma$ is drawn from its posterior. The mixed predictive distribution for a new composite ability is denoted by $p(\tilde \theta_{p'} | D)$, which is a function of 
+	$p(\gamma, \tilde \zeta_{p'} | D) = 
+	\int p(\tilde \zeta_{p'} | \sigma) p(\gamma, \sigma | D) ~d \sigma$
+and the new covariate vector $w_p'$.
 
-Predictive distributions for out-of-sample items may be discussed in a manner parallel to out-of-sample persons. The mixed predictive distribution for a new item residual, $p(\tilde \epsilon_{i'} | \D)$, is derived in a similar way as in Equation~\ref{eq:zeta-mixed}. The mixed predictive distribution for the composite difficulty for a new item is $p(\tilde \delta_{i'} | \D)$, and this is a function of $p(\vbeta, \tilde \epsilon_{i'} | \D)$ and $\x$.
+Predictive distributions for out-of-sample items may be discussed in a manner parallel to out-of-sample persons. The mixed predictive distribution for a new item residual, $p(\tilde \epsilon_{i'} | D)$, is derived in a similar way as in Equation~\ref{eq:zeta-mixed}. The mixed predictive distribution for the composite difficulty for a new item is $p(\tilde \delta_{i'} | D)$, and this is a function of $p(\beta, \tilde \epsilon_{i'} | D)$ and $x_i$.
 
 The predictive distribution for a new response arising from an out-of-sample person and out-of-sample item may be specified in terms of the composite abilities and difficulties:
 \begin{equation}
-	p(\tilde y_{i'p'} | \D) =
+	p(\tilde y_{i'p'} | D) =
 	\iint
 		\Pr (\tilde y_{i'p'} | \tilde \theta_{p'}, \tilde \delta_{i'})
-		p(\tilde \theta_{p'}, \tilde \delta_{i'} | \D)
+		p(\tilde \theta_{p'}, \tilde \delta_{i'} | D)
 	~d\tilde \theta_{p'} d \tilde \delta_{i'}
 .\end{equation}
 Alternatively, it may be specified in terms of the residual parts, structural parts, and covariates:
 \begin{equation}
-	p(\tilde y_{i'p'} | \D) =
+	p(\tilde y_{i'p'} | D) =
 	\iiiint
-		\Pr (\tilde y_{i'p'} | \vgamma,\tilde \zeta_{p'}, \vbeta, 
-			\tilde \epsilon_{i'}, \w, \x)
-		p(\vgamma, \tilde \zeta_{p'}, \vbeta, \tilde \epsilon_{i'} | \D)
-	~d\vgamma d \tilde \zeta_{p'} d \vbeta d \tilde \epsilon_{i'}
+		\Pr (\tilde y_{i'p'} | \gamma,\tilde \zeta_{p'}, \beta, 
+			\tilde \epsilon_{i'}, w_p, x_i)
+		p(\gamma, \tilde \zeta_{p'}, \beta, \tilde \epsilon_{i'} | D)
+	~d\gamma d \tilde \zeta_{p'} d \beta d \tilde \epsilon_{i'}
 ,\end{equation}
 where
 \begin{equation}
-	p(\vgamma, \tilde \zeta_{p'}, \vbeta, \tilde \epsilon_{i'} | \D) = 
+	p(\gamma, \tilde \zeta_{p'}, \beta, \tilde \epsilon_{i'} | D) = 
 	\iint
 		p(\tilde \zeta_{p'} | \sigma)
 		p(\tilde \epsilon_{i'} | \tau)
-		 p(\vgamma, \sigma, \vbeta, \tau | \D)
+		 p(\gamma, \sigma, \beta, \tau | D)
 	~d \sigma d \tau
 .\end{equation}
-Figure~\ref{subfig:ppmc-new-both} depicts how the predictive distribution for $\tilde y_{i'p'}$ is formed. Because $\tilde y_{i'p'}$ arises from $\tilde \theta_p$ and $\tilde \delta_i$, it will differ substantially from $y_{ip}$ unless $\W \vgamma$ and $\X \vbeta$ are such that the estimated $\sigma$ and $\tau$ are near zero.
+Figure~\ref{subfig:ppmc-new-both} depicts how the predictive distribution for $\tilde y_{i'p'}$ is formed. Because $\tilde y_{i'p'}$ arises from $\tilde \theta_p$ and $\tilde \delta_i$, it will differ substantially from $y_{ip}$ unless $W \gamma$ and $X \beta$ are such that the estimated $\sigma$ and $\tau$ are near zero.
 
 
 \subsection{Inferences for mixed within-sample and out-of-sample responses}
 
 A new response could, for example, come from an within-sample person but an out-of-sample item. The predictive distribution for such a response,
 \begin{equation}
-	p(\tilde y_{i'p} | \D) = 
+	p(\tilde y_{i'p} | D) = 
 	\iint
 		\Pr (\tilde y_{i'p} | \theta_{p}, \tilde \delta_{i'})
-		p(\theta_{p}, \tilde \delta_{i'} | \D)
+		p(\theta_{p}, \tilde \delta_{i'} | D)
 	~d \theta_{p} d \tilde \delta_{i'}
 ,\end{equation}
 relies on the joint distribution comprised of the posterior for $\theta_{p}$ and the mixed predictive distribution for $\tilde \delta_{i'}$.
 Alternatively, it may be specified in terms of the residual parts, structural parts, and covariates:
 \begin{equation}
-	p(\tilde y_{i'p} | \D) =
+	p(\tilde y_{i'p} | D) =
 	\iiiint
-		\Pr (\tilde y_{i'p'} | \vgamma,\zeta_{p}, \vbeta, \tilde \epsilon_{i'}, 
-			\w, \x)
-		p(\vgamma, \zeta_{p}, \vbeta, \tilde \epsilon_{i'} | \D)
-	~d\vgamma d \zeta_{p} d \vbeta d \tilde \epsilon_{i'}
+		\Pr (\tilde y_{i'p'} | \gamma,\zeta_{p}, \beta, \tilde \epsilon_{i'}, 
+			w_p, x_i)
+		p(\gamma, \zeta_{p}, \beta, \tilde \epsilon_{i'} | D)
+	~d\gamma d \zeta_{p} d \beta d \tilde \epsilon_{i'}
 ,\end{equation}
 where
 \begin{equation}
-	p(\vgamma, \zeta_{p}, \vbeta, \tilde \epsilon_{i'} | \D) = 
+	p(\gamma, \zeta_{p}, \beta, \tilde \epsilon_{i'} | D) = 
 	\int
 		p(\tilde \epsilon_{i'} | \tau)
-		p(\vgamma, \zeta_p, \vbeta, \tau | \D)
+		p(\gamma, \zeta_p, \beta, \tau | D)
 	~d \tau
 .\end{equation}
 The prediction for $\tilde y_{i'p}$ is depicted in Figure~\ref{subfig:ppmc-new-items}. 
 
-If instead the predictive distribution for a new response from a out-of-sample person but within-sample item is needed, then $p(\tilde y_{ip'} | \D)$ may be derived based on a joint distribution comprised of the posterior for $\delta_{i}$ and the mixed predictive distribution for $\tilde \theta_{p'}$. This is depicted in Figure~\ref{subfig:ppmc-new-persons}.
+If instead the predictive distribution for a new response from a out-of-sample person but within-sample item is needed, then $p(\tilde y_{ip'} | D)$ may be derived based on a joint distribution comprised of the posterior for $\delta_{i}$ and the mixed predictive distribution for $\tilde \theta_{p'}$. This is depicted in Figure~\ref{subfig:ppmc-new-persons}.
 
 
 \subsection{Inferences for special cases}
 
-If a special case of the full model is fitted, such as any described in Section~\ref{sec:special-cases}, some predictive inferences may not be available. Specifically, a parameter must be exchangeable (that is, drawn from a distribution) in order to specify a predictive distribution for it. For example, with the Rasch model (either of the marginal or joint maximum likelihood formulations) predictive distributions for $\tilde \delta_{i'}$ and $\tilde y_{i'p}$ are unavailable due the restriction $\vdelta = \X \vbeta$. 
+If a special case of the full model is fitted, such as any described in Section~\ref{sec:special-cases}, some predictive inferences may not be available. Specifically, a parameter must be exchangeable (that is, drawn from a distribution) in order to specify a predictive distribution for it. For example, with the Rasch model (either of the marginal or joint maximum likelihood formulations) predictive distributions for $\tilde \delta_{i'}$ and $\tilde y_{i'p}$ are unavailable due the restriction $\delta = X \beta$. 
 \comment{I may decide this section isn't important.}
 
 %With a simpler model, such as the Rasch model with exchangeable persons described in Section~\ref{sec:special-cases}, fewer variations are on prediction are available. For this model, posterior distributions are of course available for $\theta_p$ and $\delta_i$, and there is also the mixed predictive distribution $p(\tilde \theta_{p'} | \D)$. Given that $\delta_i$ is a non-exchangeable parameter in the Rasch model, there is no mixed predictive distribution for it. A new response must involve an existing item, but may arise from either an existing person, leading to the predictive distribution $p(\tilde y_{ip} | \D)$, or new person, leading to $p(\tilde y_{ip'} | \D)$.
@@ -424,57 +437,6 @@ If a special case of the full model is fitted, such as any described in Section~
 \section{Cross-validation}
 
 
-\section{Dissertation chapters}
-
-Proposed chapters:
-\begin{enumerate}
-	\item \emph{This introduction.}
-	\item \emph{Cross-validation using marginal likelihood to select item covariates.}
-		A frequentist-leaning approach. Simulate dataset from the full model. Fit three models without the ``random'' item aspects: (1) one missing a correct item covariate interaction, (2) one containing the correct interaction, and (3) one containing the correct interaction along with an incorrect interaction. Compare the three on the basis of (1) within-sample log-likelihood, (2) out-of-sample log-likelihood, and (3) AIC.
-	\item \emph{Cross-validation by leaving one item out.}
-		Specific approaches: (1) actually do with marginal model, (2) actually do with monte carlo simulation, (3) approximate using LOO/WAIC, (4) approximate by performing OLS on Rasch-style difficulties.
-	\item \emph{Predictive model checking.} Already wrote about this a bit.
-\end{enumerate}
-
-Parameters for simulating datasets for proposed chapter 2:
-\begin{itemize}
-	\item Simulate according to the full model.
-	\item 300 persons. Two binary covariates in a $2 \times 2$ factorial design. (Number of persons and person covariates may not matter much when focus is on item prediction.)
-	\item 24 items. Three binary covariates in a $2 \times 2 \times 2$ factorial design with 3 items per cell. Include one interaction in data generation.
-	\item Item variance $\tau$ may be manipulated to control quality of item predictors.
-\end{itemize}
-
-
-\begin{figure}[btp]
-	\centering
-	\begin{subfigure}[b]{.4\textwidth}
-		\input{./chapter_1/figs/ppmc-same-both.tex}
-		\caption{Within-sample persons and items}
-		\label{subfig:ppmc-same-both}
-	\end{subfigure}
-	~
-	\begin{subfigure}[b]{.4\textwidth}
-		\input{./chapter_1/figs/ppmc-new-both.tex}
-		\caption{Out-of-sample persons and items}
-		\label{subfig:ppmc-new-both}
-	\end{subfigure}
-	~
-	\begin{subfigure}[b]{.4\textwidth}
-		\input{./chapter_1/figs/ppmc-new-theta.tex}
-		\caption{Out-of-sample persons, within-sample items}
-		\label{subfig:ppmc-new-persons}
-	\end{subfigure}
-	~
-	\begin{subfigure}[b]{.4\textwidth}
-		\input{./chapter_1/figs/ppmc-new-delta.tex}
-		\caption{Within-sample persons, out-of-sample items}
-		\label{subfig:ppmc-new-items}
-	\end{subfigure}
-	\caption{Diagrams for generating predictive distributions of various forms. Circles represent parameters and squares represent data. The shaded region indicates predictive quantities that are not involved in the estimation. Covariates $\mathbf{W}$ and $\mathbf{X}$ are omitted.}
-	\label{fig:ppmc-models}
-\end{figure}
-
-\bibliographystyle{apacite}
-\bibliography{../../Documents/References/references}
+\printbibliography
 
 \end{document}

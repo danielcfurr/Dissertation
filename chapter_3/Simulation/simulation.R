@@ -22,7 +22,7 @@ monitor_pars = c("beta", "sigma", "psi", "zeta", "lp__", "mll_j", "cll_ij")
 
 variables_to_save <- ls()
 
-set.seed(451648)
+set.seed(451667)
 
 
 # Setup ------------------------------------------------------------------------

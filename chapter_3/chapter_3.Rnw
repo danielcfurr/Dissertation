@@ -391,7 +391,6 @@ where
 $p(y_{j} | \omega^s, \psi^s)$ is similar to
 $p(y_{j} | \omega, \psi)$
 in Equation~\ref{eq:3-marginal-likelihood} but for a given posterior sample $s$. Here the ``points'' in ``pointwise'' are clusters rather than individual observations, which is another difference between the marginal and conditional approaches. It is expected that $\mathrm{lpd}_m$ will be less than $\mathrm{lpd}_c$ \parencite{trevisani2003inequalities}.
-
 The effective number of parameters for marginal WAIC is
 \begin{equation}
   \hat p_{\mathrm{WAIC},m} =
@@ -407,7 +406,8 @@ and the final value on the deviance scale is
   \mathrm{WAIC}_m =
   -2 \widehat{\mathrm{elpd}}_{\mathrm{WAIC},m}
 .\end{equation}
-This marginal WAIC corresponds partially to the iWAIC of \textcite{li2015approximating}, though they did not consider the case of clustered data.
+
+The integrated WAIC of \textcite{li2015approximating} bears some relation to this marginal WAIC. Integrated WAIC was developed for the case in which there is a vector of direct parameters ($\zeta_j$) for each observation. The data in this case are not clustered. \textcite{li2015approximating} use Monte Carlo sampling to approximate the integration over the $\zeta_j$ vector. On one hand, integrated WAIC is less general than the marginal WAIC proposed in this chapter in that it does not handle clustered data. On the other, it is more general in that it allows for $\zeta_j$ being a vector, though the methods proposed in this chapter may be extended to cover this case.
 
 
 \subsubsection{Marginal approximate leave-one-out cross-validation}
@@ -646,7 +646,7 @@ in the marginal focus. Shown on far right are the minimum numbers of adaptive qu
 
 \subsection{Adaptive quadrature approximation}
 
-Marginal DIC, WAIC, and PSIS-LOO are calculated on the same \Sexpr{numword(length(sim_I))} simulated datasets using \Sexpr{and(sim_nodes)} adaptive quadrature nodes. Each number of nodes is about 50\% more than the preceding number. The absolute difference between approximate results from adaptive quadrature and exact results from the multivariate normal density are shown in Figure~\ref{fig:3-compare}. In this chapter, an absolute difference less than .01 is judged to be a sufficiently close approximation, which is somewhat arbitrary but should be conservative unless the information criteria values are very close. The figure indicates that more nodes are required as cluster size increases and that DIC requires more nodes than WAIC or PSIS-LOO.
+Marginal DIC, WAIC, and PSIS-LOO are calculated on the same \Sexpr{numword(length(sim_I))} simulated datasets using \Sexpr{and(sim_nodes)} adaptive quadrature nodes. Each number of nodes is 50\% greater than the preceding number, rounded to the nearest odd number. With an odd number of nodes, one node is placed on the mean of the distribution, which does not happen for an even number. The absolute difference between approximate results from adaptive quadrature and exact results from the multivariate normal density are shown in Figure~\ref{fig:3-compare}. In this chapter, an absolute difference less than .01 is judged to be a sufficiently close approximation, which is somewhat arbitrary but should be conservative unless the information criteria values are very close. The figure indicates that more nodes are required as cluster size increases and that DIC requires more nodes than WAIC or PSIS-LOO.
 
 \begin{figure}[tb]
 \begin{center}
@@ -671,7 +671,8 @@ ggplot(df_qc) +
   ylab("Absolute error of approximation") +
   labs(color = legend_title, pch = legend_title) +
   my_theme +
-  theme(panel.grid.minor.x = element_blank())
+  theme(panel.grid.minor.x = element_blank()) # +
+  # coord_cartesian(ylim = c(1e-8, max(abs(df_qc$dif_mvn))))
 @
 \end{center}
 \caption{Differences in marginal information criteria ($-2 \times \widehat{\mathrm{elpd}}_m$) between calculations using adaptive quadrature (approximate method) and the multivariate normal density function (exact method). The $y$-axis uses a log scale. The dashed line is drawn at .01.}
@@ -708,7 +709,7 @@ In this case, results may be obtained and compared for different numbers of node
 load("Simulation/bootstrap.Rdata")
 @
 
-Focusing on WAIC, the circular block bootstrap will be used to obtain standard error estimates. Before that, however, a ``brute force'' approach is used as a reliable means of studying the variability of WAIC that arises from Monte Carlo error. To this end, \Sexpr{length(sim_bs_l)} independent sets of MCMC chains are simulated, and for each conditional and marginal versions of $\mathrm{lpd}_{\mathrm{WAIC}}$, $p_{\mathrm{WAIC}}$, and $\mathrm{WAIC}$ are estimated. The same simulated dataset is used throughout, having \Sexpr{sim_J} clusters of size \Sexpr{sim_bs_I}. The standard deviation of the brute force results may serve as a benchmark against which to compare the bootstrap standard error estimates.
+Focusing on WAIC, the circular block bootstrap will be used to obtain standard error estimates. Before that, however, a ``brute force'' approach is used as a reliable means of studying the variability of WAIC that arises from Monte Carlo error. To this end, \Sexpr{length(sim_bs_l)} independent sets of MCMC chains are simulated, and for each conditional and marginal versions of $\mathrm{lpd}_{\mathrm{WAIC}}$, $p_{\mathrm{WAIC}}$, and $\mathrm{WAIC}$ are estimated. The same simulated dataset is used throughout, having \Sexpr{sim_J} clusters each having \Sexpr{sim_bs_I} units. The standard deviation of the brute force results may serve as a benchmark against which to compare the bootstrap standard error estimates.
 The means and standard deviations related to the brute force replications are presented in Table~\ref{tab:3-sim-bf}. Conditional WAIC ($\mathrm{WAIC}_c$) is substantially more variable than marginal WAIC ($\mathrm{WAIC}_m$), as shown by its larger standard deviation. For either the conditional or marginal case, most of the variability appears tied to $p_{\mathrm{WAIC}}$ rather than $\mathrm{lpd}_{\mathrm{WAIC}}$, which has a relatively low standard deviation across replications.
 
 \begin{table}[htb]
@@ -742,7 +743,7 @@ print(xtab_bf, include.rownames = FALSE, floating = FALSE,
       sanitize.text.function = function(x) x,
       sanitize.colnames.function = function(x) x)
 @
-\caption{Means and standard deviations for the ``brute force'' results for WAIC for the simulation. Results are from \Sexpr{length(sim_bs_l)} independent sets of MCMC chains using the same simulated dataset ($I=\Sexpr{sim_I[1]}$).}
+\caption{Means and standard deviations for the ``brute force'' WAIC results for the simulation. Results are from \Sexpr{length(sim_bs_l)} independent sets of MCMC chains using the same simulated dataset with cluster size $I=\Sexpr{sim_I[1]}$.}
 \label{tab:3-sim-bf}
 \end{table}
 
@@ -836,129 +837,152 @@ Five competing models are considered, differing only in what person covariates a
 
 The five models are estimated with Stan using \Sexpr{n_chains} chains of \Sexpr{f(n_iter, 0)} draws with the first \Sexpr{f(n_warmup, 0)} draws of each discarded, resulting in a total of
 \Sexpr{f(n_posterior,0)}
-kept posterior draws.
+kept posterior draws. The larger number of posterior draws is chosen here due to the anticipated Monte Carlo errors, but such a large number is not ordinarily necessary for estimating, for example, the posterior means and standard deviations for parameters.
 %The $\hat R$ convergence statistic was \Sexpr{#f(max_rhat,2)} or less for all parameters and the log posterior across models.
 Marginal DIC, WAIC, and PSIS-LOO were computed using adaptive quadrature to integrate out $\zeta$. Arbitrarily focusing on Model~4, the process described in the previous section was used to determine that \Sexpr{n_agq} nodes were sufficient to obtain an accurate approximation.
 All evaluations of the marginal likelihood that follow use this number of nodes.
 
-Table~\ref{tab:3-effn} provides the estimated effective number of parameters for each model and focus, as well as the count of parameters associated with either focus.
-The effective numbers of parameters are substantially less than the counts of parameters for conditional information criteria, owing mainly to the fact that each $zeta_j$, with its hierarchical prior, contributes less than one to the effective number of parameters.
-On the other hand, the values for marginal information criteria are close to the counts of model parameters.
-%Estimated effective numbers of parameters for conditional information criteria are much greater because each $\zeta_j$ makes a contribution instead of the single contribution of $\sigma$. Depending on the informativeness of the prior distribution, the vector $\zeta$ will contribute between 1 (if the prior is absolutely informative) and $J$ (if totally uninformative) effective parameters.
+In order to obtain an indication of the variability of results owing to Monte Carlo error, $\Sexpr{n_repeats}$ independent sets of MCMC chains are run for each model. The circular block bootstrap is not used for this purpose, as it was found to substantially underestimate the Monte Carlo error.
+Figure~\ref{fig:3-effn} provides the estimated effective number of parameters ($\hat p$) for each model and focus, as well as the count of parameters associated with either focus.
+For conditional information criteria, the $\hat p$ are substantially less than the counts of parameters, owing mainly to the fact that each $\zeta_j$, with its hierarchical prior, contributes less than one to the effective number of parameters.
+On the other hand, $\hat p$ for marginal information criteria are close to the counts of model parameters, and for WAIC and PSIS-LOO it tends to be slightly larger than the count of parameters.
 
-\begin{table}[htb]
+\begin{figure}[htb]
 \centering
-<<parameters, results = tex>>=
-# keep <- c(keep, paste0(keep, "_mcerror"))
-df <- subset(df_models, variable %in% c("p_dic", "p_waic", "p_loo"))
-df$Criterion <- toupper(gsub("(p\\_)", "", df$variable))
-df$Criterion <- gsub("(LOO|LOOIC)", "PSIS-LOO", df$Criterion)
-df$variable <- NULL
-df <- aggregate(value ~ focus + model + Criterion, df, mean)
+<<parameters, fig = TRUE>>=
+df <- df_models
+
+# Add IC type to values in "variable" column when not included
+df$variable <- as.character(df$variable)
+append_dic <- grepl("^(best\\_lpd|mean\\_lpd)$", df$variable)
+df$variable[append_dic] <- paste0(df$variable[append_dic], "_dic")
+append_waic <- grepl("^p\\_[0-9]+$", df$variable)
+df$variable[append_waic] <- paste0(df$variable[append_waic], "_waic")
+append_looic <- grepl("^pk\\_[0-9]+$", df$variable)
+df$variable[append_looic] <- paste0(df$variable[append_looic], "_looic")
+
+df$Criterion <- toupper(sub("^.+\\_([a-z]+)$", "\\1", df$variable))
+df$Criterion <- toupper(df$Criterion)
+df$Criterion <- sub("(LOO|LOOIC)", "PSIS-LOO", df$Criterion)
+df$Criterion <- factor(df$Criterion, c("DIC", "WAIC", "PSIS-LOO", "Count"))
+
+df$variable <- sub("\\_(dic|waic|loo|looic)$", "", df$variable)
+df$variable <- sub("^(dic|waic|loo|looic)$", "estimate", df$variable)
 
 marginal_pars <- c(25, 26, 26, 27, 28)
 conditional_pars <- c(25, 26, 26, 27, 28) - 1 + 316
 df_par_counts <- data.frame(focus = rep(c("Marginal", "Conditional"), each = 5),
                             model = rep(1:5, times = 2),
-                            Criterion = rep("Count", 10),
-                            value = c(marginal_pars[1:5], conditional_pars[1:5]))
-df <- rbind(df, df_par_counts)
-df$Criterion <- factor(df$Criterion, c("DIC", "WAIC", "PSIS-LOO", "Count"))
+                            count_pars = c(marginal_pars[1:5], conditional_pars[1:5]))
+df <- merge(df, df_par_counts)
 
-df_tab <- dcast(df, focus + Criterion ~ model)
-names(df_tab) <- c("Focus", "Criterion", paste("Model", 1:5))
-df_tab$Focus <- as.character(df_tab$Focus)
-df_tab$Focus[-c(1,5)] <- ""
-print(xtable(df_tab),
-      hline.after = c(-1, 0, 4, 8),
-      include.rownames = FALSE,
-      floating = FALSE)
+ggplot(subset(df, variable == "p")) +
+  aes(y = value, x = model) +
+  geom_jitter(height = 0, width = .1, alpha = .25) +
+  geom_segment(aes(y = count_pars, yend = count_pars,
+                   x = model-.4, xend = model+.4)) +
+  facet_grid(focus ~ Criterion, scale = "free_y") +
+  labs(y = "Estimated effective number of parameters", x = "Model") +
+  my_theme +
+  theme(panel.grid.minor.x = element_blank())
 @
-\caption{Estimated effective number of parameters $\hat p$) for the five models using various information criteria. The counts of parameters associated with each focus are also provided.}
-\label{tab:3-effn}
-\end{table}
+\caption{Estimated effective number of parameters ($\hat p$) for the five models latent regression Rasch models. Points represent the results of the $\Sexpr{n_repeats}$ independent MCMC simulations per model. A small amount of horizontal jitter is added is added to the points. The horizontal lines represent the counts of parameters associated with each model and focus. The $y$-axes vary by focus.}
+\label{fig:3-effn}
+\end{figure}
 
-Figure~\ref{fig:3-example-ic} provides the estimates of conditional and marginal DIC, WAIC, and PSIS-LOO. The different conditional information criteria differ from each other for any given model, though the three of them suggest the same ranking of models. Marginal WAIC provides nearly the same results as marginal PSIS-LOO, while values for marginal DIC are consistently less. The model rankings differ somewhat between the conditional and marginal focus, though small difference between competing models should not be over-interpreted due to the unknown degree of Monte Carlo error.
+Figure~\ref{fig:3-example-ic} provides the estimates for the information criteria values themselves ($-2 \widehat \mathrm{elpd}$). The different conditional information criteria differ from each other for any given model, though they seem to show a similar pattern between models. The high degree of Monte Carlo error in the conditional focus renders differentiating the predictive performance of the models difficult. In the marginal focus the amount of Monte Carlo error is less but still poses a degree of difficulty in making close comparisons. Models~1 and 2 clearer provided poorer predictions in comparison to the others using marginal information criteria, and there is some evidence supporting Model~4 as the best among the candidates.
 
 \begin{figure}
 \begin{center}
 <<mcerror_plot, fig = TRUE>>=
-df <- subset(df_models, variable %in% c("dic", "waic", "looic"))
-df$Criterion <- toupper(df$variable)
-df$Criterion <- gsub("(LOO|LOOIC)", "PSIS-LOO", df$Criterion)
-df$Criterion <- factor(df$Criterion, c("DIC", "WAIC", "PSIS-LOO"))
-ggplot(df) +
+ggplot(subset(df, variable == "estimate")) +
   aes(y = value, x = as.factor(model)) +
-  geom_jitter(height = 0, width = .1, alpha = .5) +
+  geom_jitter(height = 0, width = .1, alpha = .25) +
   facet_grid(focus ~ Criterion, scale = "free_y") +
-  labs(y = NULL, x = "Model") +
+  labs(y = "Information criteria value", x = "Model") +
   my_theme +
   theme(panel.grid.minor.x = element_blank())
 @
 \end{center}
-\caption{Information criteria values for the five latent regression Rasch models by focus.}
+\caption{Information criteria values ($-2 \widehat \mathrm{elpd}$) for the five latent regression Rasch models. Points represent the results of the $\Sexpr{n_repeats}$ independent MCMC simulations per model. A small amount of horizontal jitter is added to the points. The $y$-axes vary by focus.}
 \label{fig:3-example-ic}
 \end{figure}
 
-<<mcerror_numbers>>=
-# For reporting in text, get ranges of IC values
-# ic_range <- aggregate(value ~ focus + Criterion, data = df,
-#                       FUN = function(x) max(x) - min(x))
-# ic_range_cond <- ic_range[ic_range$focus == "Conditional", "value"]
-# ic_range_marg <- ic_range[ic_range$focus == "Marginal", "value"]
+As discussed in their respective sections, WAIC and PSIS-LOO are associated with diagnostics to support the reliability of their estimates. In either case, the diagnostics are specified at the observation level. In the conditional focus, observations are defined at the unit level, whereas they are defined at the cluster level for the marginal focus. For WAIC any given observation should contribute less than .4 to $\hat p$, and for PSIS-LOO an observation should not have a Pareto shape parameter greater than one. Table~\ref{tab:3-diagnostics} provides the counts of problematic observations by model, averaging over the \Sexpr{n_repeats} repreated MCMC simulations. Conditional WAIC has a small number problematic observations with each model, while marginal WAIC does not exhibit any such issues. No problematic observations are found for either form of PSIS-LOO.
 
-# For reporting in text, get means of mc errors
-# mcerror_mean <- aggregate(mcerror ~ focus + ic_type, data = df, FUN = mean)
-# mcerror_mean_cond <- mcerror_mean[mcerror_mean$focus == "Conditional", "mcerror"]
-# mcerror_mean_marg <- mcerror_mean[mcerror_mean$focus == "Marginal", "mcerror"]
+\begin{table}[htb]
+\centering
+<<diagnostics_table, results = tex>>=
+# pk_05 includes counts for pk_10
+df_diagnostic <- aggregate(value ~ focus + Criterion + variable + model,
+                           subset(df, variable %in% c("p_04", "pk_10")), sum)
+df_diagnostic$mean <- df_diagnostic$value / n_repeats
+df_diagnostic <- dcast(df_diagnostic, model ~ focus + Criterion, value.var = "mean")
+df_diagnostic$blank <- ""
+df_diagnostic <- df_diagnostic[, c(1:3, 6, 4:5)]
+names(df_diagnostic) <- c("Model", "WAIC", "PSIS-LOO", "", "WAIC", "PSIS-LOO")
+xtab_diagnostic <- xtable(df_diagnostic, digits = 1,
+                          display = c("d","d","f","f","f","f","f"))
+add_row <- list(list(-1),
+                paste("\\hline",
+                      "& \\multicolumn{2}{c}{Conditional} & ",
+                      "& \\multicolumn{2}{c}{Marginal} \\\\",
+                      "\\cline{2-3} \\cline{5-6} \n"))
+print(xtab_diagnostic, include.rownames = FALSE, floating = FALSE,
+      hline.after = c(0, 5),
+      add.to.row = add_row,
+      sanitize.text.function = function(x) x,
+      sanitize.colnames.function = function(x) x)
 @
+\caption{Counts of problematic observations for WAIC and PSIS-LOO by model, averaged over the \Sexpr{n_repeats} repreated MCMC simulations. For WAIC, this is the count of observations that contribute more than .4 to $\hat p$, and for PSIS-LOO this is the number of observations having a Pareto shape parameter greater than one. In the conditional focus, observations are defined at the unit level, whereas they are defined at the cluster level for the marginal focus.}
+\label{tab:3-diagnostics}
+\end{table}
 
 
 \section{Discussion}
 
-...
+The preceding analyses demonstrated the existence of non-ignorable Monte Carlo error in the forms of information criteria considered. Caution is therefore advised when using DIC, WAIC, or PSIS-LOO for selecting a preferred model. Disappointingly, the circular block bootstrap did not provide reasonable estimates for Monte Carlo error of information criteria estimates. The approach taken in the applied example of simply rerunning the MCMC simulation many times is cumbersome and merely suggestive of the amount of Monte Carlo error, but it could provide accurate results if the computing power is available to conduct a much larger number of replications.
+
+The choice of conditional or marginal focus should depend on the prediction inference to be made, but the marginal approach was found to have some advantages over the conditional approach. Marginal information criteria were found to have less Monte Carlo error and to be more robust in terms of their associated diagnostics. The conditional information criteria are more easily obtained, however, as they depend on quantities easily generated from MCMC software. In addition, BUGS and JAGS provide conditional DIC by default, perhaps accounting for the popularity of DIC.
+
+Marginal information criteria are easily obtained for linear models when the cluster-specific parameters to be integrated out are assigned a normal prior. For non-linear models, adaptive gaussian quadrature was shown to be a viable means of obtaining the necessary marginal likelihoods. The methods described in this chapter may be extended to models with cluster-specific vectors of parameters having a multivariate normal prior.
 
 
-\newpage
-
-\section{Notes}
-
-\subsection{Information criteria}
-
-\textcite{spiegelhalter2002bayesian}: ``[I]n hierarchical modelling we cannot uniquely define a `likelihood or `model complexity' without specifying the level of the hierarchy that is the focus of the modelling exercise (Gelfand and Trevisani, 2002)'' (p. 585). ``However,the foregoing discussion suggests that such measures of complexity may not be unique and will depend on the number of parameters in focus. Furthermore, the inclusion of a prior distribution induces a dependence between parameters that is likely to reduce the effective dimensionality, although the degree of reduction may depend on the data that are available'' (p. 585). Section 9.2 (p. 612) briefly discusses invariance to reparmeterization, ``focus'', and integrating out parameters not in the focus.
-
-\textcite{trevisani2003inequalities}: Show that marginal posterior likelihoods are expected to be smaller than conditional (``first stage'') posterior likelihoods, whatever the data and priors.
-
-\textcite{celeux2006deviance}: Describe different versions of DIC for ``missing data'' models: ``observed'' DICs ignore latent variables; ``complete'' DICs are based on joint distribution of response and latent variables; and ``conditional'' DICs resemble those in this chapter. Their $\mathrm{DIC}_7$ seems to correspond to my conditional DIC, and their $\mathrm{DIC}_1$ seems to correspond to my marginal DIC. They refer to both of these as conditional (p. 10).
-
-\textcite{plummer2008penalized}: ``If DIC is regarded as an approximation to the penalized plug-in deviance, then this perspective imposes some important restrictions on its use. A necessary assumption for the penalized plug-in deviance, and hence DIC, is that the data can be broken down into components that are conditionally independent given the parameters in focus. A second important assumption is that the effective number of parameters $p_D$ must be small in relation to the sample size n. When this assumption does not hold, $2p_D$ is a poor approximation to the optimism of the plug-in deviance, and DIC under-penalizes complex models'' (p. 535, discussion section). Second assumption is a problem for conditional DIC. ``The asymptotic justification of DIC using a cross-validation argument is a Bayesian analogue of the result of Stone (1977) on the equivalence of cross-validation and the AIC. Indeed, in the discussion of Spiegelhalter and others (2002), Stone (2002) emphasized the importance of the independence assumption for DIC. The poor empirical performance of DIC compared to crossvalidation when the assumption $p_D \ll n$ does not hold was highlighted by Vehtari and Lampinen (2002)'' (p. 535, discussion section). Otherwise, a lot of stuff on mixture models.
-
-\textcite{spiegelhalter2014deviance}: DIC is not consistent--``the stated aim of DIC is in optimizing short-term predictions of a particular type, and not in trying to identify the `true' model'' (p. 4). DIC uses ``plug-in'' predictions rather than the full predictive distribution, which prevents invariance to reparameterization (p. 4). ``DIC, as with other prediction-based criteria, starts with a particular posterior predictive target based on replicates conditional on certain elements of the design remaining fixed--when we assume a parametric model this replication structure defines the `focus' of the analysis. As implemented in BUGS, DIC takes the lowest level parameters as the focus, but this is only to make the technique computationally feasible'' (p.4). van der Linde (2005, 2012), Plummer (2008) and Ando (2012) have recommended increasing the DIC penalty (p. 5).
-
-\textcite{gelman2014understanding}: ``As is well known in hierarchical modeling (see, e.g., Spiegelhalter et al. 2002; Gelman et al. 2003), the line separating prior distribution from likelihood is somewhat arbitrary and is related to the question of what aspects of the data will be changed in hypothetical replications. In a hierarchical model ... we can imagine replicating new data in existing groups ... or new data in new groups'' (p. 1000). They go on to connect this with PPMC. For WAIC, ``More generally, the adjustment [penalty] can be thought of as an approximation to the number of `unconstrained' parameters in the model'' (p.1003). ``WAIC has the desirable property of averaging over the posterior distribution rather than conditioning on a point estimate... AIC and DIC estimate the performance of the plugin predictive density...'' (p. 1003). ``Bayesian LOO-CV has been proven to asymptotically equal to WAIC (Watanabe 2010)'' (p. 1004). ``Formulas such as AIC, DIC, and WAIC fail in various examples: AIC does not work in settings with strong prior information, DIC gives nonsensical results when the posterior distribution is not well summarized by its mean, and WAIC relies on a data partition that would cause difficulties with structured models such as for spatial or network data. Cross-validation is appealing but can be computationally expensive and also is not always well defined in dependent data settings'' (p. 1015).
-
-\textcite{li2015approximating}: Develop Bayesian cross-validation for models with dependent latent variables;
-
-\textcite{vehtari2016practical}: Pareto smoothing is used in PSIS-LOO because for plain importance sampling the ``resulting estimate is noisy, as the variance of the importance weights can be large or even infinite (Peruggia, 1997, Epifani et al., 2008)'' (p. 1). ``WAIC is fully Bayesian in that it uses the entire posterior distribution, and it is asymptotically equal to Bayesian cross-validation. Unlike DIC, WAIC is invariant to parametrization and also works for singular models'' (p. 2). ``Although WAIC is asymptotically equal to LOO, we demonstrate that PSIS-LOO is more robust in finite case with weak priors or influential observations'' (p. 2). Mention that $y_i$ could be all observations for cluster $i$ rather than single observation, but that PSIS-LOO and WAIC may fail in these cases (p. 8). They don't mention marginalizing the likelihood in this context. Standard errors for PSIS-LOO and WAIC are discussed (p. 19). ``In practice we expect Monte Carlo standard errors to not be so interesting because we would hope to have enough simulations that the computations are stable, but it could make sense to look at them just to check that they are low enough to be negligible compared to sampling error (which scales like $1=n$ rather than $1=S$)'' (p. 20). ``Cross-validation and WAIC should not be used to select a single model among a large number of models due to a selection induced bias as demonstrated, for example, by Piironen and Vehtari (2016)'' (p. 20).
-
-
-\subsection{Monte Carlo error}
-
-\textcite{zhu2000comparing}: Applied three variations on the delta method for assessing the Monte Carlo errors for DIC estimates. All of them underestimated the MC error--in comparison to a brute force method of refitting the model many times to obtain the variance of DIC estimates.
-
-\textcite{mignani2001markov}: Applied block bootstrap to MCMC.
-
-\textcite{politis1994stationary}: Reference for stationary bootstrap.
-
-\textcite{lahiri1999theoretical}: Found that fixed block sizes perform better in terms of mean-squared-error than random block sizes. Later refuted.
-
-\textcite{politis2004automatic} and \textcite{patton2009correction} provide calculations for block sizes in stationary and circular bootstrapping. I guess. Both are very difficult to follow. \textcite{lahiri2007nonparametric} provide a plug-in rule for selecting optimal block lengths, though this requires applying the jackknife on the boostrapped samples.
-
-% \emph{((Why do we need marginal likelihoods?)}
+% \newpage
 %
-% In this chapter, adaptive quadrature for Markov chain Monte Carlo simulation is developed for the numerical integration required for obtaining marginal likelihoods. Adaptive quadrature may be used with models having a variety of distributions for the response variable so long as the parameters to be integrated out are modeled as normally distributed. For models with normal response variables, the marginal likelihood may be evaluated analytically yielding the multivariate normal density function, which will provide exact results. I therefore consider linear mixed models for which the numerically evaluated integrals can be compared with the analytical result. I perform simulations to compare Widely Applicable Information Criteria (WAIC) and Pareto Smoothed Importance Sampling Leave-One-Out (PSIS-LOO) estimates derived from both analytical and numerical integration, using the analytical results to assess the accuracy of adaptive quadrature.
+% \section{Notes}
+%
+% \subsection{Information criteria}
+%
+% \textcite{spiegelhalter2002bayesian}: ``[I]n hierarchical modelling we cannot uniquely define a `likelihood or `model complexity' without specifying the level of the hierarchy that is the focus of the modelling exercise (Gelfand and Trevisani, 2002)'' (p. 585). ``However,the foregoing discussion suggests that such measures of complexity may not be unique and will depend on the number of parameters in focus. Furthermore, the inclusion of a prior distribution induces a dependence between parameters that is likely to reduce the effective dimensionality, although the degree of reduction may depend on the data that are available'' (p. 585). Section 9.2 (p. 612) briefly discusses invariance to reparmeterization, ``focus'', and integrating out parameters not in the focus.
+%
+% \textcite{trevisani2003inequalities}: Show that marginal posterior likelihoods are expected to be smaller than conditional (``first stage'') posterior likelihoods, whatever the data and priors.
+%
+% \textcite{celeux2006deviance}: Describe different versions of DIC for ``missing data'' models: ``observed'' DICs ignore latent variables; ``complete'' DICs are based on joint distribution of response and latent variables; and ``conditional'' DICs resemble those in this chapter. Their $\mathrm{DIC}_7$ seems to correspond to my conditional DIC, and their $\mathrm{DIC}_1$ seems to correspond to my marginal DIC. They refer to both of these as conditional (p. 10).
+%
+% \textcite{plummer2008penalized}: ``If DIC is regarded as an approximation to the penalized plug-in deviance, then this perspective imposes some important restrictions on its use. A necessary assumption for the penalized plug-in deviance, and hence DIC, is that the data can be broken down into components that are conditionally independent given the parameters in focus. A second important assumption is that the effective number of parameters $p_D$ must be small in relation to the sample size n. When this assumption does not hold, $2p_D$ is a poor approximation to the optimism of the plug-in deviance, and DIC under-penalizes complex models'' (p. 535, discussion section). Second assumption is a problem for conditional DIC. ``The asymptotic justification of DIC using a cross-validation argument is a Bayesian analogue of the result of Stone (1977) on the equivalence of cross-validation and the AIC. Indeed, in the discussion of Spiegelhalter and others (2002), Stone (2002) emphasized the importance of the independence assumption for DIC. The poor empirical performance of DIC compared to crossvalidation when the assumption $p_D \ll n$ does not hold was highlighted by Vehtari and Lampinen (2002)'' (p. 535, discussion section). Otherwise, a lot of stuff on mixture models.
+%
+% \textcite{spiegelhalter2014deviance}: DIC is not consistent--``the stated aim of DIC is in optimizing short-term predictions of a particular type, and not in trying to identify the `true' model'' (p. 4). DIC uses ``plug-in'' predictions rather than the full predictive distribution, which prevents invariance to reparameterization (p. 4). ``DIC, as with other prediction-based criteria, starts with a particular posterior predictive target based on replicates conditional on certain elements of the design remaining fixed--when we assume a parametric model this replication structure defines the `focus' of the analysis. As implemented in BUGS, DIC takes the lowest level parameters as the focus, but this is only to make the technique computationally feasible'' (p.4). van der Linde (2005, 2012), Plummer (2008) and Ando (2012) have recommended increasing the DIC penalty (p. 5).
+%
+% \textcite{gelman2014understanding}: ``As is well known in hierarchical modeling (see, e.g., Spiegelhalter et al. 2002; Gelman et al. 2003), the line separating prior distribution from likelihood is somewhat arbitrary and is related to the question of what aspects of the data will be changed in hypothetical replications. In a hierarchical model ... we can imagine replicating new data in existing groups ... or new data in new groups'' (p. 1000). They go on to connect this with PPMC. For WAIC, ``More generally, the adjustment [penalty] can be thought of as an approximation to the number of `unconstrained' parameters in the model'' (p.1003). ``WAIC has the desirable property of averaging over the posterior distribution rather than conditioning on a point estimate... AIC and DIC estimate the performance of the plugin predictive density...'' (p. 1003). ``Bayesian LOO-CV has been proven to asymptotically equal to WAIC (Watanabe 2010)'' (p. 1004). ``Formulas such as AIC, DIC, and WAIC fail in various examples: AIC does not work in settings with strong prior information, DIC gives nonsensical results when the posterior distribution is not well summarized by its mean, and WAIC relies on a data partition that would cause difficulties with structured models such as for spatial or network data. Cross-validation is appealing but can be computationally expensive and also is not always well defined in dependent data settings'' (p. 1015).
+%
+% \textcite{li2015approximating}: Develop Bayesian cross-validation for models with dependent latent variables;
+%
+% \textcite{vehtari2016practical}: Pareto smoothing is used in PSIS-LOO because for plain importance sampling the ``resulting estimate is noisy, as the variance of the importance weights can be large or even infinite (Peruggia, 1997, Epifani et al., 2008)'' (p. 1). ``WAIC is fully Bayesian in that it uses the entire posterior distribution, and it is asymptotically equal to Bayesian cross-validation. Unlike DIC, WAIC is invariant to parametrization and also works for singular models'' (p. 2). ``Although WAIC is asymptotically equal to LOO, we demonstrate that PSIS-LOO is more robust in finite case with weak priors or influential observations'' (p. 2). Mention that $y_i$ could be all observations for cluster $i$ rather than single observation, but that PSIS-LOO and WAIC may fail in these cases (p. 8). They don't mention marginalizing the likelihood in this context. Standard errors for PSIS-LOO and WAIC are discussed (p. 19). ``In practice we expect Monte Carlo standard errors to not be so interesting because we would hope to have enough simulations that the computations are stable, but it could make sense to look at them just to check that they are low enough to be negligible compared to sampling error (which scales like $1=n$ rather than $1=S$)'' (p. 20). ``Cross-validation and WAIC should not be used to select a single model among a large number of models due to a selection induced bias as demonstrated, for example, by Piironen and Vehtari (2016)'' (p. 20).
+%
+%
+% \subsection{Monte Carlo error}
+%
+% \textcite{zhu2000comparing}: Applied three variations on the delta method for assessing the Monte Carlo errors for DIC estimates. All of them underestimated the MC error--in comparison to a brute force method of refitting the model many times to obtain the variance of DIC estimates.
+%
+% \textcite{mignani2001markov}: Applied block bootstrap to MCMC.
+%
+% \textcite{politis1994stationary}: Reference for stationary bootstrap.
+%
+% \textcite{lahiri1999theoretical}: Found that fixed block sizes perform better in terms of mean-squared-error than random block sizes. Later refuted.
+%
+% \textcite{politis2004automatic} and \textcite{patton2009correction} provide calculations for block sizes in stationary and circular bootstrapping. I guess. Both are very difficult to follow. \textcite{lahiri2007nonparametric} provide a plug-in rule for selecting optimal block lengths, though this requires applying the jackknife on the boostrapped samples.
 
-\newpage
 
 \printbibliography
 
