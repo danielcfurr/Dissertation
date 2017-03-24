@@ -34,3 +34,5 @@ chapter_2/chapter_2.tex
 chapter_4*
 *.rds
 *.toc
+appendix/appendix.tex
+*.tex

@@ -1,0 +1,100 @@
+\documentclass{article}
+\usepackage[left=1.00in, right=1.00in, top=1.00in, bottom=1.00in]{geometry}
+
+\begin{document}
+\SweaveOpts{concordance = TRUE, echo = FALSE, height = 3.5}
+
+\author{Daniel C. Furr}
+\date{\today}
+\title{Software details}
+\maketitle
+
+
+<<setup, include=FALSE>>=
+special_mentions <- c("ggplot2", "xtable", "rstan", "edstan", "boot", "loo")
+for(pkg in special_mentions) library(pkg, character.only = TRUE)
+
+name_and_version <- function(pkg) paste(pkg, packageVersion(pkg))
+
+# Function relies on external 'special_mentions'
+report_packages <- function(...) {
+  files <- c(...)
+  packages <- c()
+  for(f in files) {
+    lines <- grep("library\\(.+)", readLines(f), value = TRUE)
+    packages <- c(packages, sub(".*library\\(([a-zA-Z0-9]+),?.*).*", "\\1", lines))
+  }
+  packages <- sort(unique(packages))
+  packages <- packages[! packages %in% special_mentions]
+  output <- character(length(packages))
+  for(p in 1:length(packages)) {
+    library(packages[p], character.only = TRUE)
+    output[p] <- c(paste(packages[p], packageVersion(packages[p])))
+  }
+  return(paste(output, collapse = ", "))
+}
+
+files_2 <- c("../chapter_2/simulation part 2.R",
+             "../chapter_2/chapter_2.Rnw")
+files_3 <- c("../chapter_3/simulation/simulation.R",
+             "../chapter_3/simulation/bootstrap.R",
+             "../chapter_3/application/application.R",
+             "../chapter_3/application/brute_force.R",
+             "../chapter_3/chapter_3.Rnw")
+@
+
+
+\section{Software details for chapter 2}
+
+Stata 14.2 was used to conduct the simulation. The Rasch and LLTM models were fit using the \texttt{melogit} command. For example, if \texttt{y} is the response variable and \texttt{item} and \texttt{person} are both factor variables, then the Rasch model may be estimated as follows:
+\begin{verbatim}
+melogit y ibn.item, noconstant || person:
+\end{verbatim}
+
+A new dataset may then be created having one row per item. Suppose that the variable \texttt{delta} is the estimated item difficulties and \texttt{delta\_se} is the standard errors for those estimates.
+Also, suppose that \texttt{x1}, \texttt{x2}, and \texttt{x3} are item covariates. The LLTM-E2S may be fit as follows:
+\begin{verbatim}
+gsem (delta <- c.delta_se#c.M@1 x1 x2 x3), variance(M@1)
+\end{verbatim}
+
+Figures and tables were prepared using R \Sexpr{getRversion()} with the
+  \Sexpr{name_and_version("ggplot2")} and
+  \Sexpr{name_and_version("xtable")} packages, respectively.
+The following R packages were additionally used:
+\Sexpr{report_packages(files_2)}.
+
+\section{Software details for chapter 3}
+
+All analysis was conducted using R \Sexpr{getRversion()}.
+MCMC simulation was carried out using the
+  rstan \Sexpr{packageVersion("rstan")} package,
+  which is the R implementation of Stan.
+WAIC and PSIS-LOO estimates were obtained using
+  loo \Sexpr{packageVersion("loo")}.
+The block bootstrap was carried out using the \texttt{tsboot} function in
+  boot \Sexpr{packageVersion("boot")}.
+The example application data was from
+  edstan \Sexpr{packageVersion("edstan")}.
+Figures and tables were prepared using the
+  ggplot2 \Sexpr{packageVersion("ggplot2")} and
+  xtable \Sexpr{packageVersion("xtable")}, respectively.
+The following R packages were additionally used:
+  \Sexpr{report_packages(files_3)}.
+
+The Stan code used for the random intercept model is:
+\begin{verbatim}
+<<stan_rim, results=tex>>=
+cat(readLines("../chapter_3/simulation/rim_mvn.stan"), sep = "\n")
+@
+\end{verbatim}
+
+The Stan code used for the latent regression Rasch model is
+\begin{verbatim}
+<<stan_latreg, results=tex>>=
+cat(readLines("../chapter_3/application/rasch_edstan_modified.stan"), sep = "\n")
+@
+\end{verbatim}
+
+
+\end{document}
+

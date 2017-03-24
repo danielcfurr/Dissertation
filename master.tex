@@ -6,14 +6,8 @@
 
 \documentclass{ucbthesis}
 
-\usepackage[american]{babel}
-\usepackage{csquotes}
-\usepackage[backend=biber, style=apa]{biblatex}
-\DeclareLanguageMapping{american}{american-apa}
+\include{packages}
 \bibliography{../../Documents/References/references.bib}
-
-\usepackage{amsmath}
-
 
 % To compile this file, run "latex thesis", then "biber thesis"
 % (or "bibtex thesis", if the output from latex asks for that instead),
@@ -36,10 +30,10 @@
 
 % Declarations for Front Matter
 
-\title{Bayesian and frequentist cross-validation methods for clustered and cross-clustered data}
+\title{Bayesian and frequentist cross-validation methods for explanatory item response models}
 \author{Daniel C. Furr}
 \degreesemester{Spring}
-\degreeyear{1995}
+\degreeyear{2017}
 \degree{Doctor of Philosophy}
 \chair{Professor Sophia Rabe-Hesketh}
 \othermembers{Professor Alan Hubbard \\
@@ -80,6 +74,20 @@ transcript alike. Washable an acre. To canned, silence in foreign.
 \clearpage
 \listoftables
 
+\chapter*[Preface]{Preface}
+\addcontentsline{toc}{chapter}{Preface}
+
+A variety of predictive inferences may be made from explanatory item response models. That is, given data in which participants have responded to several or more test questions, along with information about the characteristics of the individuals or questions, what predictions may be made regarding potential new related data? As item response models are intended to measure the ability of individuals and the difficulty of items, what can be said about the likely value for a new, unsampled person or item? Also, what can be said about expectations regarding an out-of-sample response itself? How can expectations regarding the predictive power of model be used as a basis for comparing several different models? Lastly, how do all these inferences vary depending on the choice of statistical framework?
+
+The chapters of this dissertation are intended to be three independent, publishable papers. Nevertheless, each concerns separate facets of this same topic. While the context of explanatory item models is niche, the insights made in this work also apply more broadly. In particular, most of this work applies directly to models for clustered or cross-classified data in general.
+
+Chapter 1 is expository in nature, describing explanatory item response models and comparing the freqentist and Bayesian frameworks in the context of these models. Differences in how the same model is understood and specified depending on the framework are discussed, as are the nature of various predictions that may be made given the framework.
+
+Chapter 2 is situated in the frequentist framework and focuses on models for the prediction (or explanation) of item difficulties. Within the frequentist framework, a naive, incorrectly specified model is likely to be used for item prediction. Further, model comparison using Akaike information criteria and related methods provides misleading results with the naive model. To address these problems, a two-stage modeling strategy is proposed, and a simulation is conducted to compare parameter recovery and predictive performance for the naive and two-stage approaches.
+
+Chapter 3 takes a Bayesian outlook and focuses on models for the prediction of person abilities. It is argued that the standard way of applying Bayesian forms of information criteria to these models yields the wrong inference, that being an inference conditional on the particular individuals measured. To correct for this, marginalizing the person abilities out of the likelihood using an adaptive quadrature scheme with Markov chain Monte Carlo estimation is proposed. Further, a bootstrap method for time series data is applied to the information criteria to obtain an estimate of the Monte Carlo error involved. A simulation is conducted to verify the accuracy of the adaptive quadrature and bootstrap methods, and subsequently an applied example is provided.
+
+
 \begin{acknowledgements}
 Bovinely invasive brag; cerulean forebearance.
 Washable an acre. To canned, silence in foreign.
@@ -90,33 +98,16 @@ Masterpiece as devoted. My primal the narcotic. For cine?
 In the glitter. For so talented. Which is confines cocoa accomplished.
 Or obstructive, or purposeful.
 And exposition? Of go. No upstairs do fingering.
-
 \end{acknowledgements}
+
+
 
 \end{frontmatter}
 
 \pagestyle{headings}
 
-% (Optional) \part{First Part}
+\include{chapters}
 
-\newpage
-\chapter{Cross-validation for cross-clustered data}
-\input{chapter_1}
-
-\newpage
-\chapter{Frequentist cross-validation with the doubly explanatory model}
-\chaptermark{Frequentist cross-validation}
-\input{chapter_2}
-
-\newpage
-\chapter{Bayesian cross-validation with the doubly explanatory model}
-\chaptermark{Bayesian cross-validation}
-\input{chapter_3}
-
-
-% \appendix
-% \chapter{More Monticello Candidates}
-
-\printbibliography
+%\printbibliography
 
 \end{document}
