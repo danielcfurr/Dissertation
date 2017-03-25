@@ -53,6 +53,8 @@ model_list <- list(~ 1,
 dl <- irt_data(y = aggression$dich, jj = aggression$person,
                ii = aggression$item, covariates = aggression,
                formula = model_list[[4]])
+# fit <- irt_stan(dl, "rasch_edstan_modified.stan", iter = n_iter,
+#                 chains = n_chains, warmup = n_warmup)
 fit <- irt_stan(dl, "rasch_edstan_modified.stan", iter = n_iter,
                 chains = n_chains, warmup = n_warmup)
 

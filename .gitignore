@@ -36,3 +36,6 @@ chapter_4*
 *.toc
 appendix/appendix.tex
 *.tex
+*Archive*
+*.lof
+*.lot

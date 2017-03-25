@@ -834,7 +834,7 @@ rmse_2 <- ggplot(subset(df_rmse, over_nitems)) +
             col = "black", lty = "dashed") +
   facet_wrap(~Selector, nrow = 1) +
   xlab(x_lab_over_I) +
-  ylab(expression(paste(RMSE[italic(m)^symbol("\52")]))) +
+  ylab(expression(paste("Mean ", RMSEP[italic(m)^symbol("\52")]))) +
   scale_x_continuous(breaks = unique(df_rmse$nitems)) +
   expand_limits(y = df_rmse_expand) +
   my_theme +

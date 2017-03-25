@@ -52,18 +52,18 @@
 
 \begin{frontmatter}
 
-\begin{dedication}
-\null\vfil
-\begin{center}
-To Ossie Bernosky\\\vspace{12pt}
-And exposition? Of go. No upstairs do fingering. Or obstructive, or purposeful.
-In the glitter. For so talented. Which is confines cocoa accomplished.
-Masterpiece as devoted. My primal the narcotic. For cine? To by recollection
-bleeding. That calf are infant. In clause. Be a popularly. A as midnight
-transcript alike. Washable an acre. To canned, silence in foreign.
-\end{center}
-\vfil\null
-\end{dedication}
+%\begin{dedication}
+%\null\vfil
+%\begin{center}
+%To Ossie Bernosky\\\vspace{12pt}
+%And exposition? Of go. No upstairs do fingering. Or obstructive, or purposeful.
+%In the glitter. For so talented. Which is confines cocoa accomplished.
+%Masterpiece as devoted. My primal the narcotic. For cine? To by recollection
+%bleeding. That calf are infant. In clause. Be a popularly. A as midnight
+%transcript alike. Washable an acre. To canned, silence in foreign.
+%\end{center}
+%\vfil\null
+%\end{dedication}
 
 % You can delete the \clearpage lines if you don't want these to start on
 % separate pages.
@@ -77,28 +77,38 @@ transcript alike. Washable an acre. To canned, silence in foreign.
 \chapter*[Preface]{Preface}
 \addcontentsline{toc}{chapter}{Preface}
 
-A variety of predictive inferences may be made from explanatory item response models. That is, given data in which participants have responded to several or more test questions, along with information about the characteristics of the individuals or questions, what predictions may be made regarding potential new related data? As item response models are intended to measure the ability of individuals and the difficulty of items, what can be said about the likely value for a new, unsampled person or item? Also, what can be said about expectations regarding an out-of-sample response itself? How can expectations regarding the predictive power of model be used as a basis for comparing several different models? Lastly, how do all these inferences vary depending on the choice of statistical framework?
+This dissertation focuses on predictive inferences for item response models that account for factors associated with person ability and item difficulty, known as explanatory item response models. Of particular interest is the use of information criteria for the comparison of competing models, such as models that include different sets of item- or person-related covariates. While the context of explanatory item response models is niche, the insights made in this work also apply more broadly, having implications for model comparison for clustered or cross-classified data in general.
 
-The chapters of this dissertation are intended to be three independent, publishable papers. Nevertheless, each concerns separate facets of this same topic. While the context of explanatory item models is niche, the insights made in this work also apply more broadly. In particular, most of this work applies directly to models for clustered or cross-classified data in general.
+The chapters of this dissertation are intended to be three independent, publishable papers, but they are interrelated nonetheless. Chapter~1 introduces explanatory item response models, comparing model specification in the Bayesian and frequentist statistical frameworks. The various predictive inferences and how they vary depending on framework are explicated. In this way, the first chapter serves as a conceptual basis for the others, which seek to solve specific problems.
 
-Chapter 1 is expository in nature, describing explanatory item response models and comparing the freqentist and Bayesian frameworks in the context of these models. Differences in how the same model is understood and specified depending on the framework are discussed, as are the nature of various predictions that may be made given the framework.
+Chapter~2 is situated in the frequentist framework and focuses on models for the prediction of item difficulty. I argue that the usual model for item difficulty, the linear logistic test model, is in general misspecified, yielding biased parameter estimates and inaccurate standard errors. Moreover, using the Akaike information criterion with this model provides misleading results. I propose a two-stage estimation strategy that yields better parameter estimates and may be paired with AIC or leave-one-out cross-validation.
 
-Chapter 2 is situated in the frequentist framework and focuses on models for the prediction (or explanation) of item difficulties. Within the frequentist framework, a naive, incorrectly specified model is likely to be used for item prediction. Further, model comparison using Akaike information criteria and related methods provides misleading results with the naive model. To address these problems, a two-stage modeling strategy is proposed, and a simulation is conducted to compare parameter recovery and predictive performance for the naive and two-stage approaches.
+Chapter 3 takes a Bayesian outlook and focuses on models for the prediction of person abilities. I argue that the usual application of Bayesian forms of information criteria to these models yields the wrong inference.
+Specifically, when using likelihoods that are conditional on person ability, information criteria estimate the expected fit of the model to new data arising from the same persons.
+I propose an adaptive quadrature scheme for use within Markov chain Monte Carlo simulation to obtain likelihoods that are marginal over the ability distribution, which may be used with information criteria to estimate the expected fit of the model to a new sample of persons. 
 
-Chapter 3 takes a Bayesian outlook and focuses on models for the prediction of person abilities. It is argued that the standard way of applying Bayesian forms of information criteria to these models yields the wrong inference, that being an inference conditional on the particular individuals measured. To correct for this, marginalizing the person abilities out of the likelihood using an adaptive quadrature scheme with Markov chain Monte Carlo estimation is proposed. Further, a bootstrap method for time series data is applied to the information criteria to obtain an estimate of the Monte Carlo error involved. A simulation is conducted to verify the accuracy of the adaptive quadrature and bootstrap methods, and subsequently an applied example is provided.
+%A variety of predictive inferences may be made from explanatory item response models. That is, given data in which participants have responded to several or more test questions, along with information about the characteristics of the individuals or questions, what predictions may be made regarding potential new related data? As item response models are intended to measure the ability of individuals and the difficulty of items, what can be said about the likely value for a new, unsampled person or item? Also, what can be said about expectations regarding an out-of-sample response itself? How can expectations regarding the predictive power of model be used as a basis for comparing several different models? Lastly, how do all these inferences vary depending on the choice of statistical framework?
+%
+%The chapters of this dissertation are intended to be three independent, publishable papers. Nevertheless, each concerns separate facets of this same topic. While the context of explanatory item models is niche, the insights made in this work also apply more broadly. In particular, most of this work applies directly to models for clustered or cross-classified data in general.
+%
+%Chapter 1 is expository in nature, describing explanatory item response models and comparing the freqentist and Bayesian frameworks in the context of these models. Differences in how the same model is understood and specified depending on the framework are discussed, as are the nature of various predictions that may be made given the framework.
+%
+%Chapter 2 is situated in the frequentist framework and focuses on models for the prediction (or explanation) of item difficulties. Within the frequentist framework, a naive, incorrectly specified model is likely to be used for item prediction. Further, model comparison using Akaike information criteria and related methods provides misleading results with the naive model. To address these problems, a two-stage modeling strategy is proposed, and a simulation is conducted to compare parameter recovery and predictive performance for the naive and two-stage approaches.
+%
+%Chapter 3 takes a Bayesian outlook and focuses on models for the prediction of person abilities. It is argued that the standard way of applying Bayesian forms of information criteria to these models yields the wrong inference, that being an inference conditional on the particular individuals measured. To correct for this, marginalizing the person abilities out of the likelihood using an adaptive quadrature scheme with Markov chain Monte Carlo estimation is proposed. Further, a bootstrap method for time series data is applied to the information criteria to obtain an estimate of the Monte Carlo error involved. A simulation is conducted to verify the accuracy of the adaptive quadrature and bootstrap methods, and subsequently an applied example is provided.
 
 
-\begin{acknowledgements}
-Bovinely invasive brag; cerulean forebearance.
-Washable an acre. To canned, silence in foreign.
-Be a popularly. A as midnight transcript alike.
-To by recollection bleeding. That calf are infant. In clause.
-Buckaroo loquaciousness?  Aristotelian!
-Masterpiece as devoted. My primal the narcotic. For cine?
-In the glitter. For so talented. Which is confines cocoa accomplished.
-Or obstructive, or purposeful.
-And exposition? Of go. No upstairs do fingering.
-\end{acknowledgements}
+%\begin{acknowledgements}
+%Bovinely invasive brag; cerulean forebearance.
+%Washable an acre. To canned, silence in foreign.
+%Be a popularly. A as midnight transcript alike.
+%To by recollection bleeding. That calf are infant. In clause.
+%Buckaroo loquaciousness?  Aristotelian!
+%Masterpiece as devoted. My primal the narcotic. For cine?
+%In the glitter. For so talented. Which is confines cocoa accomplished.
+%Or obstructive, or purposeful.
+%And exposition? Of go. No upstairs do fingering.
+%\end{acknowledgements}
 
 
 

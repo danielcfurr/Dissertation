@@ -81,14 +81,14 @@ Figures and tables were prepared using the
 The following R packages were additionally used:
   \Sexpr{report_packages(files_3)}.
 
-The Stan code used for the random intercept model is:
+The Stan code used for the random intercept model is printed below. The transformed data and generated quantities blocks are needed only to sample from the posterior log-likelihoods. In the generated quantities block, \texttt{cll\_ij} is the conditional log-likelihood for an observation, and \texttt{mll\_j} is the marginal log-likelihood for a cluster.
 \begin{verbatim}
 <<stan_rim, results=tex>>=
 cat(readLines("../chapter_3/simulation/rim_mvn.stan"), sep = "\n")
 @
 \end{verbatim}
 
-The Stan code used for the latent regression Rasch model is
+The Stan code used for the latent regression Rasch model is below. This is a modified version of the Rasch model provided by edstan. It adds in sampling from the posterior of \texttt{zeta} and \texttt{theta\_fix}, which are required for approximating the marginal log-likelihood.
 \begin{verbatim}
 <<stan_latreg, results=tex>>=
 cat(readLines("../chapter_3/application/rasch_edstan_modified.stan"), sep = "\n")
