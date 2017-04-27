@@ -9,7 +9,7 @@
 \usepackage{csquotes}
 \usepackage[backend=biber, style=apa]{biblatex}
 \DeclareLanguageMapping{american}{american-apa}
-\bibliography{../../../Documents/References/references.bib}
+\bibliography{../references.bib}
 
 \title{A comparison of the frequentist and Bayesian frameworks in relation to explanatory item response models}
 \author{Daniel Furr}
@@ -29,12 +29,12 @@
 \section{Introduction}
 
 Item response data are cross-classified; that is, any given response to an item is nested both within a person and within an item.
-In developing a model for such data, either or both of persons and items may be regarded as arising from a distribution, and the mean of these distributions may be conditional on characteristics of persons or items.
-In this way, an item response model may be described as explanatory if it estimates the effects of person or item characteristics on the abilities of people or the difficulties of items.
+In developing a model for such data, the effects on response probabilities of either or both of persons and items may be regarded as arising from a distribution, and the mean of these distributions may be a function of characteristics of persons or items.
+In this way, an item response model may be described as explanatory if it provides estimates of the effects of person and/or item characteristics, in contrast to purely descriptive models that do not include these sorts of effects.
 
-Rasch-family item response models are the focus of this chapter. In the frequentist framework, some explanatory Rasch-family models cannot be estimated using the usual marginal maximum likelihood estimation.
-In particular, marginal maximum likelihood estimation is infeasible if both the persons and items are modeled as arising from distributions.
-However, when persons but not items are assumed to arise from a distribution, a variety of standard software packages are available to fit such models with relative ease.
+Explanatory Rasch-family item response models are the focus of this chapter. In the frequentist framework, some explanatory Rasch-family models cannot be estimated using the usual marginal maximum likelihood estimation.
+In particular, marginal maximum likelihood estimation is infeasible if both the person and item effects are modeled as arising from distributions.
+However, when effects of persons but not items are assumed to arise from a distribution, a variety of standard software packages are available to fit such models with relative ease.
 There is no such barrier in the Bayesian framework, as models for cross-classified data may be estimated using Markov chain Monte Carlo (MCMC) simulation. The existing software for MCMC tends to be highly flexible but more cumbersome to use.
 
 In this chapter, frequentist and Bayesian approaches to explanatory item response modeling are compared.
@@ -52,7 +52,7 @@ A useful model for dichotomous item response data is the Rasch model \parencite{
 	\frac {\exp(\theta_p - \delta_i)^{y_{ip}}}
 	{1 + \exp(\theta_p - \delta_i)}
 ,\end{equation}
-where $y_{ip} = 1$ if person $p$ ($p = 1, \dotsc, P$) responded to item $i$ ($i = 1, \dotsc, I$) correctly and $y_{ip} = 0$ otherwise, $\theta_p$ is the ability parameter for person $p$, and $\delta_i$ is the difficulty parameter for item $i$. The individual instances of $\theta_p$ and $\delta_i$ may be collected into vectors $\theta$ and $\delta$, respectively. This is a ``descriptive'' item response model \parencite{Wilson2004}; it fully accounts for abilities and difficulties, assuming the appropriateness of the model, but does not offer insight into the factors associated with abilities and difficulties.
+where $y_{ip} = 1$ if person $p$ ($p = 1, \dotsc, P$) responded to item $i$ ($i = 1, \dotsc, I$) correctly and $y_{ip} = 0$ otherwise, $\theta_p$ is the ability of person $p$, and $\delta_i$ is the difficulty of item $i$. The individual instances of $\theta_p$ and $\delta_i$ may be collected into vectors $\theta$ and $\delta$, respectively. This is a ``descriptive'' item response model \parencite{Wilson2004}; it fully accounts for abilities and difficulties, assuming the appropriateness of the model, but does not offer insight into the factors associated with abilities and difficulties.
 
 The model in Equation~\ref{eq:base} may be expanded to a ``person explanatory'' model by decomposing $\theta_p$ as
 \begin{equation} \label{eq:theta}
@@ -76,13 +76,13 @@ and
 ,\end{equation}
 though other choices could be considered. The person and item ``sides'' of the model are specified in directly parallel ways, and much of the discussion that follows will make use of this point.
 
-The model is also presented as a directed graphical model \parencite[for example,][]{dawid1999probabilistic, jordan2004graphical} in Figure~\ref{fig:eirm-model}. In the diagram, parameters are represented by circles, and data are represented by squares. The boxed regions indicate whether the parameters vary over persons, items or neither, and naturally the item responses $y$ vary over both. The direction of the arrows indicates dependence. For example, $\theta$ depends on $\gamma$ and $\zeta$ directly, while it depends indirectly on $\sigma$.
+The model is also presented as a directed graphical model \parencite[for example,][]{dawid1999probabilistic, jordan2004graphical} in Figure~\ref{fig:eirm-model}. In the diagram, unknowns are represented by circles and data are represented by squares. The boxed regions indicate whether the parameters vary over persons, items or neither, and naturally the item responses $y$ vary over both. The direction of the arrows indicates dependence. For example, $\theta$ depends on $\gamma$ and $\zeta$ directly, while it depends indirectly on $\sigma$. This sort of diagram is associated with Bayesian modeling, where all the unknowns may be considered parameters. From a frequentist perspective, the unknowns are a mixture of parameters and latent variables, which will be discussed in greater depth later.
 
 \begin{figure}[btp]
 	\centering
 	\input{figs/eirm-model.tex}
 	\caption[The doubly explanatory model]
-	{The doubly explanatory model presented as a directed graphical model. Circles represent parameters and squares represent data. Person covariates $w_p$ and item covariates $x_i$ are omitted. The boxed regions indicate whether the parameters vary over persons, items or neither.}
+	{The doubly explanatory model presented as a directed graphical model. Circles represent parameters or latent variables, and squares represent data. Person covariates $w_p$ and item covariates $x_i$ are omitted. The boxed regions indicate whether the parameters vary over persons, items or neither.}
 	\label{fig:eirm-model}
 \end{figure}
 
@@ -95,7 +95,7 @@ In Bayesian methodology, the posterior distribution for the parameters is factor
 	p(\omega)
 	p(y | \omega, W, X)
 ,\end{equation}
-which indicates that the posterior distribution proportional to the product of the prior distribution and the likelihood. In the above, $\omega$ is the set of model parameters. In this chapter, the following terminology for different types of parameters is used.
+which indicates that the posterior distribution is proportional to the product of the prior distribution and the likelihood. In the above, $\omega$ is the set of model parameters. In this chapter, the following terminology for different types of parameters is used.
 \begin{enumerate}
 	\item \emph{Basic parameters}
 	are the foundational parameters. They are plugged into the likelihood directly or affect it indirectly through intermediate parameters. Priors are specified for them.
@@ -108,11 +108,11 @@ which indicates that the posterior distribution proportional to the product of t
 	\item \emph{Intermediate parameters}
 	are composites built from basic parameters. They may be included in Bayesian modeling to streamline specifying a model or they may be quantities of genuine interest. They may be plugged into the likelihood in place of basic parameters. They do not have explicit prior distributions, but instead their priors follow from the priors for the basic parameters. Parameters $\theta_p$ and $\delta_i$ are examples
 	\item \emph{Hyperparameters}
-	are parameters for the estimated distributions for exchangeable basic parameters. These are not plugged into the likelihood but rather determine the prior distributions for the exchangeable parameters. They do have prior distributions themselves.
+	are parameters for the distributions for exchangeable basic parameters. They do have prior distributions themselves.
 \end{enumerate}
 Of the above terms, only ``hyperparameters'' is in general usage, while the remaining types of parameters are not typically distinguished from one another.
 
-The doubly descriptive model has a likelihood (Equation~\ref{eq:base}) based on intermediate parameters $\theta$ and $\delta$, which are in turn built from basic parameters $\gamma$, $\zeta$, $\delta$, and $\epsilon$ (Equations~\ref{eq:theta} and \ref{eq:delta}). $\gamma$ and $\delta$ are non-exchangeable basic parameters, while $\zeta$ and $\epsilon$ are exchangeable basic parameters whose priors depend on hyperparameters $\sigma$ and $\tau$, respectively.
+The doubly descriptive model has a likelihood (Equation~\ref{eq:base}) based on intermediate parameters $\theta$ and $\delta$, which are in turn built from basic parameters $\gamma$, $\zeta$, $\beta$, and $\epsilon$ (Equations~\ref{eq:theta} and \ref{eq:delta}). $\gamma$ and $\beta$ are non-exchangeable basic parameters, while $\zeta$ and $\epsilon$ are exchangeable basic parameters whose priors depend on hyperparameters $\sigma$ and $\tau$, respectively.
 The prior distribution in Equation~\ref{eq:bayes} may be rewritten as
 \begin{equation} \label{eq:prior}
 	p(\omega) =
@@ -143,7 +143,7 @@ or in terms of intermediate parameters as
 .\end{equation}
 Given that both the prior and the likelihood may be specified ignoring the intermediate parameters $\theta$ and $\delta$, it is clear that they are redundant. For many applications, however, they have useful interpretations, and for that reason estimation of their posteriors may be desired. Further, the posterior distributions of $\theta$ and $\delta$ can be estimated easily from the posterior draws of the basic parameters.
 
-The posterior for a single parameter, marginal in regards to all other parameters, may be obtain by integrating the full joint posterior over all other parameters. Let $D = \{ y, W, X \}$ represent the full data. Then,
+The posterior for a single parameter, marginal in regards to all other parameters, may be obtained by integrating the full joint posterior over all other parameters. Let $D = \{ y, W, X \}$, represent the full data. Then,
 \begin{equation}
 	p(\sigma | D) =
 	\iiiiint
@@ -220,7 +220,7 @@ Because the random-effects $\zeta_p$ and $\epsilon_i$ are not nested, the model 
 \subsection{Special cases}
 \label{sec:special-cases}
 
-Many dichotomous item response models are special cases of the doubly explanatory model that arise from restrictions placed on the composite abilities and difficulties. For example, the the Rasch model \parencite{Rasch1960a} as fit by marginal maximum likelihood estimation \parencite{bock1981marginal} can be written as
+Many dichotomous item response models are special cases of the doubly explanatory model that arise from restrictions placed on the composite abilities and difficulties. For example, the Rasch model \parencite{Rasch1960a} as fit by marginal maximum likelihood estimation \parencite{bock1981marginal} can be written as
 \begin{equation}
 	\Pr ( y_{ip} | \theta_p, \delta_i) =
 	\frac {\exp(\theta_p - \delta_i)^{y_{ip}}}
@@ -256,7 +256,7 @@ in which the left hand bracketed quantity is the prior and and the right hand qu
 		p(\theta_p | \sigma)
 	~d \theta_p
 .\end{equation}
-The single dimensional integration is simpler than the $I \times P$ dimensional integral in Equation~\ref{eq:marginal-likelihood} and may be approximated using adaptive quadrature \parencite{rabe2002reliable}.
+The single-dimensional integration is simpler than the $I \times P$ dimensional integral in Equation~\ref{eq:marginal-likelihood} and may be approximated using adaptive quadrature \parencite{rabe2002reliable}.
 
 \begin{table}
 	\centering
@@ -284,18 +284,18 @@ The single dimensional integration is simpler than the $I \times P$ dimensional 
 	\label{tab:special-cases}
 \end{table}
 
-Other special cases arise from different choices of restrictions placed on the composite abilities and difficulties, and these are summarized in Table~\ref{tab:special-cases}. The the Rasch model as fit by joint maximum likelihood estimation \parencite[for example,][]{embretson2000item} includes only the structured parts of ability and difficulty with identity matrices for $W$ and $X$ (one difficulty or ability parameter must be constrained for identifiability). In contrast, the random item Rasch model \parencite[for example,][]{DeBoeck2008} has only the residual parts for both sides (a model intercept must be added). The latent regression item response model \parencite{mislevy1985estimation, adams1997multilevel} includes both parts of the composite ability and the structured part of item difficulty, where $X$ is an identity matrix. The linear logistic test model (LLTM) \parencite{fischer1973linear}, has the residual part for ability and the structured part for difficulty. Its extension, the linear logistic test model with error (LLTM-E) \parencite[for example,][]{mislevy1988exploiting, Janssen2004}, adds an item difficulty residual.
+Other special cases arise from different choices of restrictions placed on the composite abilities and difficulties, and these are summarized in Table~\ref{tab:special-cases}. As mentioned earlier, the Rasch model as fit by joint maximum likelihood estimation \parencite[for example,][]{embretson2000item} includes only the structured parts of ability and difficulty with identity matrices for $W$ and $X$ (one difficulty or ability parameter must be constrained for identifiability). In contrast, the random item Rasch model \parencite[for example,][]{DeBoeck2008} has only the residual parts for both sides (a model intercept must be added). The latent regression item response model \parencite{mislevy1985estimation, adams1997multilevel} includes both parts of the composite ability and the structured part of item difficulty, where $X$ is an identity matrix. The linear logistic test model (LLTM) \parencite{fischer1973linear}, has the residual part for ability and the structured part for difficulty. Its extension, the linear logistic test model with error (LLTM-E) \parencite[for example,][]{mislevy1988exploiting, Janssen2004}, adds an item difficulty residual.
 
 
 \section{Estimated and predicted quantities}
 
-Several quantities from the fitted model may be of interest. At the macro-level, $\gamma$ represents the effects of the person covariates, and $W \gamma$ together with $\sigma$ describes the conditional distribution for person abilities. Likewise, $\beta$ represents the effects of the item covariates, and $X \beta$ together with $\tau$ describes the conditional distribution for item difficulties. Depending on the choice of either a frequentist and Bayesian framework, the maximum likelihood estimates $\hat \gamma$ and $\hat \beta$ or posterior distributions $p(\gamma | D)$ and $p(\beta | D)$ will be obtained for these parameters.
+Several quantities from the model may be of interest, whether they are estimated directly or obtained after estimation. At the macro-level, $\gamma$ represents the effects of the person covariates, and $W \gamma$ together with $\sigma$ describes the conditional distribution for person abilities. Likewise, $\beta$ represents the effects of the item covariates, and $X \beta$ together with $\tau$ describes the conditional distribution for item difficulties. Depending on the choice of either a frequentist and Bayesian framework, the maximum likelihood estimates $\hat \gamma$ and $\hat \beta$ or posterior distributions $p(\gamma | D)$ and $p(\beta | D)$ will be obtained for these parameters.
 
 For some applications, such as measurement ``per se'', the specific persons and items will be of interest. This is the case when, for example, measurements are needed for person abilities and a Wright map \parencite{wilson2004constructing} is used in interpreting them in relation to the item difficulties. In this case, attention will be placed on $\theta$ and $\delta$, though $\zeta$ and $\epsilon$ may be of interest in the identification of outliers. These are within-sample quantities; that is, the estimation sample contains a person $p$ who is associated with $\zeta_p$ and $\theta_p$ and also an item $i$ that is associated with $\epsilon_i$ and $\delta_i$.
 
 There may be a (real or hypothetical) person $p'$ not represented in the estimation data. This out-of-sample person has a covariate vector $w_{p'}$ and is associated with parameters $\tilde \zeta_{p'}$ and $\tilde \theta_{p'}$, none of which play a role in fitting the model. Likewise, an out-of-sample item $i'$ associated with $x_{i'}$, $\tilde \epsilon_{i'}$, and $\tilde \delta_{i'}$ may be envisioned. Inferences for these out-of-sample quantities may be obtained from the fitted model.
 
-Inferences for the within-sample quantities $\theta_p$, $\delta_i$, $\zeta_p$, and $\epsilon_i$ are called predictions in the frequentist framework because they are random variables (and not parameters) that are not directly estimated from the model. The same inferences are estimates in a Bayesian setting where $\zeta_p$ and $\epsilon_i$ are a part of the posterior and $\theta_p$ $\delta_i$ are functions of the posterior. Inferences for the out-of-sample quantities $\tilde \theta_{p'}$, $\tilde \delta_{i'}$, $\tilde \zeta_{p'}$, and $\tilde \epsilon_{i'}$ and are considered predictions in either case.
+Inferences for the within-sample quantities $\theta_p$, $\delta_i$, $\zeta_p$, and $\epsilon_i$ are called predictions in the frequentist framework because they are random variables (and not parameters) that are not directly estimated from the model. The same inferences are estimates in a Bayesian setting where $\zeta_p$ and $\epsilon_i$ are drawn from the posterior and $\theta_p$ $\delta_i$ are functions of parameters drawn from the posterior. Inferences for the out-of-sample quantities $\tilde \theta_{p'}$, $\tilde \delta_{i'}$, $\tilde \zeta_{p'}$, and $\tilde \epsilon_{i'}$ are considered predictions in either case.
 
 Lastly, inferences may be made regarding new responses, which are always considered predictions. A new response may be conceived as arising from a within-sample person to a within-sample item, indicated by $\tilde y_{ip}$. This is, in other words, simply a model-predicted response for an existing observation. Several possibilities exist for out-of-sample responses: $\tilde y_{i'p}$ represents a new response from a within-sample person to an out-of-sample item, $\tilde y_{ip'}$ represents a new response from an out-of-sample person to a within-sample item, and $\tilde y_{i'p'}$ represents a new response when both the associated item and person are out-of-sample. 
 
@@ -444,7 +444,12 @@ The predictive distribution for a new response arising from an out-of-sample per
 		p(\gamma, \tilde \zeta_{p'}, \beta, \tilde \epsilon_{i'} | D)
 	~d\gamma d \tilde \zeta_{p'} d \beta d \tilde \epsilon_{i'}
 ,\end{align}
-which relies on the mixed predictive distributions described previously. In MCMC simulation, $p(\tilde y_{ip}^s | D)$ may be obtained as a random draw from
+where
+$p(\tilde \theta_{p'}, \tilde \delta_{i'} | D)$ 
+is the joint mixed predictive distribution for $\tilde \theta_{p'}$ and $\tilde \delta_{i'}$, and 
+$p(\gamma, \tilde \zeta_{p'}, \beta, \tilde \epsilon_{i'} | D)$
+includes the mixed predictive distributions for $\tilde \zeta_{p'}$ and $\tilde \epsilon_{i'}$, as described previously.
+In MCMC simulation, $p(\tilde y_{ip}^s | D)$ may be obtained as a random draw from
 $\mathrm{Bernoulli}(\mathrm{logit}^{-1}(\theta_{p}^s - \delta_{i}^s))$,
 and likewise $p(\tilde y_{i'p'}^s | D)$ may be obtained as random draw from
 $\mathrm{Bernoulli}(\mathrm{logit}^{-1}(\tilde \theta_{p'}^s - \tilde \delta_{i'}^s))$.
@@ -501,7 +506,7 @@ Like empirical Bayes predictions, it uses the conditional posterior for $\zeta_p
 		p(\zeta_{p'}, \epsilon_{i'} | \hat \tau, \hat \sigma)
 	~d \zeta_{p'} d \epsilon_{i'}
 ,\end{equation}
-which uses the prior for $\zeta_p$ and $\epsilon_i$. This corresponds to what \textcite{skrondal2009prediction} refer to as the population-averaged expectation, again with the exception that two sets of residuals are involved here. Lastly, predictions for new responses of the form $\tilde y_{i'p}$ and $\tilde y_{ip'}$ by mixing the use of posterior and prior distributions for the residuals.
+which uses the prior for $\zeta_p$ and $\epsilon_i$. This corresponds to what \textcite{skrondal2009prediction} refer to as the population-averaged expectation, again with the exception that two sets of residuals are involved here. Lastly, predictions for new responses of the form $\tilde y_{i'p}$ and $\tilde y_{ip'}$ are obtained by mixing the use of posterior and prior distributions for the residuals.
 
 %
 %
@@ -547,11 +552,11 @@ For example, with the Rasch model (either the marginal or joint maximum likeliho
 
 \section{Discussion}
 
-For models that are not hierarchical, frequentist analysis will often be equivalent to a Bayesian analysis using uniform priors. In a more complicated model, like the doubly explanatory model, the results are still expected to be very similar if the priors for Bayesian analysis are uniform or weakly informative. Nonetheless, some advantages have been identified in the Bayesian approach.
+For models that are not hierarchical, frequentist analysis will often be equivalent to a Bayesian analysis using uniform priors. In a more complicated model, like the doubly explanatory model, the results are still expected to be very similar if the priors for Bayesian analysis are uniform or diffuse. Nonetheless, some advantages have been identified in the Bayesian approach.
 
-First, in Bayesian modeling it is natural to model basic parameters, intermediate parameters, and hyperparameters simultaneously, while frequentist analysis does not directly estimate exchangeable basic parameters or intermediate parameters. Paradoxically, in frequentist item response modeling, the actual measurement of persons, that is obtaining a prediction for $\theta_p$, must occur in a secondary, post-estimation step when marginal maximum likelihood estimation is used.
+First, in Bayesian modeling it is natural to make inferences about basic parameters, intermediate parameters, and hyperparameters simultaneously, while frequentist analysis does not directly estimate exchangeable basic parameters or intermediate parameters. Paradoxically, in frequentist item response modeling, the actual measurement of persons, that is obtaining a prediction for $\theta_p$, must occur in a second, post-estimation step when marginal maximum likelihood estimation is used.
 
-Second, Bayesian analysis propagates uncertainty regarding parameters while frequentist analysis does not. For example, frequentist analysis may obtain an empirical Bayes prediction $\hat \zeta_p^\mathrm{EB}$ that will depend on point estimate $\hat \sigma$ and other parameters, and standard errors for $\hat \zeta_p^\mathrm{EB}$ will be unduly small as $\hat \sigma$ is treated as known. In contrast, the Bayesian posterior for $\zeta_p$ will be marginal over the posterior for $\sigma$ (and all other parameters) and so will more accurately represent the uncertainty regarding $\zeta_p$. The difference is more pronounce with an intermediate parameter like $\theta_p$, as the true Bayesian posterior for it will also reflect the uncertainty regarding $\gamma$ in addition to $\zeta_p$.
+Second, Bayesian analysis propagates uncertainty regarding parameters while frequentist analysis does not. For example, frequentist analysis may obtain an empirical Bayes prediction $\hat \zeta_p^\mathrm{EB}$ that will depend on point estimate $\hat \sigma$ and other parameters, and standard errors for $\hat \zeta_p^\mathrm{EB}$ will be unduly small as $\hat \sigma$ is treated as known. In contrast, the Bayesian posterior for $\zeta_p$ will be marginal over the posterior for $\sigma$ (and all other parameters) and so will more accurately represent the uncertainty regarding $\zeta_p$. The difference is more pronounced with an intermediate parameter like $\theta_p$, as the true Bayesian posterior for it will also reflect the uncertainty regarding $\gamma$ in addition to $\zeta_p$.
 
 
 \printbibliography
