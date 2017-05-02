@@ -6,7 +6,7 @@ n_cores <- parallel::detectCores()
 n_repeats <- 10
 
 # Increase each node by 50% over last, rounding to odd number
-n_agq_try <- c(7, rep(NA, times = 2))
+n_agq_try <- c(7, rep(NA, times = 3))
 for(i in 2:length(n_agq_try)) {
   x <- floor(1.5*n_agq_try[i-1])
   is_even <- x %% 2 == 0
@@ -19,7 +19,7 @@ start <- Sys.time()
 
 variables_to_save <- ls()
 
-# set.seed(72793333)
+set.seed(727933533)
 
 
 # Set up -----------------------------------------------------------------------
@@ -50,37 +50,38 @@ model_list <- list(~ 1,
 
 # Select number of adaptive quadrature points ----------------------------------
 
+# Fit model 4
 dl <- irt_data(y = aggression$dich, jj = aggression$person,
                ii = aggression$item, covariates = aggression,
                formula = model_list[[4]])
-# fit <- irt_stan(dl, "rasch_edstan_modified.stan", iter = n_iter,
-#                 chains = n_chains, warmup = n_warmup)
 fit <- irt_stan(dl, "rasch_edstan_modified.stan", iter = n_iter,
                 chains = n_chains, warmup = n_warmup)
 
-# Get Marginal IC results for each choice of number AGQ nodes
-agq_try <- matrix(NA, ncol = 4, nrow = length(n_agq_try))
-colnames(agq_try) <- c("nodes", "dic", "waic", "looic")
-agq_try[, "nodes"] <- n_agq_try
-agq_change <- agq_try[-1, ]
-for(i in 1:length(n_agq_try)) {
-  message(Sys.time(), ": i=", i)
+# Try the node counts until difference < .01 acheived.
+i <- 1
+success <- FALSE
+agq_results <- matrix(NA, ncol = 3, nrow = length(n_agq_try))
+colnames(agq_results) <- c("dic", "waic", "looic")
+while(i <= length(n_agq_try) & !success) {
+  message(Sys.time(), ": Trying n_agq = ", n_agq_try[i])
   cl <- makeCluster(n_cores)
   registerDoParallel(cl)
-  ll_marg_j <- mll_parallel(fit, dl, f_marginal_j, "zeta", "sigma", agq_try[i])
+  ll_marg_j <- mll_parallel(fit, dl, f_marginal_j, "zeta", "sigma", n_agq_try[i])
   stopCluster(cl)
-  agq_try[i, "dic"] <- dic(ll_marg_j)["dic"]
-  agq_try[i, "waic"] <- waic(ll_marg_j$ll)[["waic"]]
-  agq_try[i, "looic"] <- loo(ll_marg_j$ll, cores = n_cores)[["looic"]]
-  if(i > 1) agq_change[i-1, 2:4] <- agq_try[i, 2:4] - agq_try[i-1, 2:4]
+  agq_results[i, "dic"] <- dic(ll_marg_j)["dic"]
+  agq_results[i, "waic"] <- waic(ll_marg_j$ll)[["waic"]]
+  agq_results[i, "looic"] <- loo(ll_marg_j$ll, cores = n_cores)[["looic"]]
+  if(i > 1) success <- all(abs(agq_results[i] - agq_results[i]) < .01)
+  i <- i + 1
 }
 
-# Select first choice of N nodes with < .01 change
-acceptable_change <- apply(agq_change[, -1], 1, function(x) all(abs(x) < .01))
-first_acceptable <- min(which(acceptable_change == TRUE))
-(n_agq <- agq_try[first_acceptable + 1])
+if(success) {
+  n_agq <- n_agq_try[i]
+} else {
+  warning("Search for number of adaptive quadrature nodes failed.")
+}
 
-variables_to_save <- c(variables_to_save, "agq_try", "n_agq")
+variables_to_save <- c(variables_to_save, "n_agq", "agq_results")
 
 
 # Fit the models and get conditional/marginal IC with bootstrapping ------------

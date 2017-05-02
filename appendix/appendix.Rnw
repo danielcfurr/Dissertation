@@ -39,7 +39,6 @@ files_2 <- c("../chapter_2/simulation part 2.R",
 files_3 <- c("../chapter_3/simulation/simulation.R",
              "../chapter_3/simulation/bootstrap.R",
              "../chapter_3/application/application.R",
-             "../chapter_3/application/brute_force.R",
              "../chapter_3/chapter_3.Rnw")
 @
 

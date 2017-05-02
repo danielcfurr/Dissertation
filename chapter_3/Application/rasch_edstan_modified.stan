@@ -43,22 +43,22 @@ transformed data {
       W_adj[j,k] = (W[j,k] - adj[1,k]) / adj[2,k];
 }
 parameters {
-  vector[I-1] beta_free;
+  vector[I-1] delta_free;
   vector[J] theta;
   real<lower=0> sigma;
   vector[K] lambda_adj;
 }
 transformed parameters {
-  vector[I] beta;
-  beta[1:(I-1)] = beta_free;
-  beta[I] = -1*sum(beta_free);
+  vector[I] delta;
+  delta[1:(I-1)] = delta_free;
+  delta[I] = -1*sum(delta_free);
 }
 model {
-  target += normal_lpdf(beta | 0, 3);
+  target += normal_lpdf(delta | 0, 3);
   theta ~ normal(W_adj*lambda_adj, sigma);
   lambda_adj ~ student_t(3, 0, 1);
   sigma ~ exponential(.1);
-  y ~ bernoulli_logit(theta[jj] - beta[ii]);
+  y ~ bernoulli_logit(theta[jj] - delta[ii]);
 }
 generated quantities {
   vector[K] lambda;

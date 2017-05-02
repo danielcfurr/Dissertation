@@ -836,17 +836,12 @@ ggplot(df_bs) +
 <<application_start>>=
 rm(list = ls()[! ls() %in% startup_vars])
 load("Application/application.Rdata")
-load("Application/brute_force.Rdata")
 @
 
 A latent regression Rasch model is fit to a dataset on verbal aggression \parencite{Vansteelandt2000} that consists of $J = 316$ persons and $I = 24$ items.
 Participants were instructed to imagine four frustrating scenarios, and for each they responded to items regarding whether they would react by cursing, scolding, and shouting. They also responded to parallel items regarding whether they would \emph{want} to engage in the three behaviors, resulting in a total six items per scenario (cursing/scolding/shouting $\times$ doing/wanting). An example item is, ``A bus fails to stop for me. I would want to curse.'' The response options for all items were ``yes'', ``perhaps'', and ``no.'' The items have been dichotomized for this example by combining ``yes'' and ``perhaps'' responses. Two person-related covariates are included: the respondent's trait anger score \parencite{spielberger1988state}, which is a raw score from a separate measure taking values ranging from 11 to 39 in the data, and an indicator for whether the respondent is male, which takes the values 0 and 1.
 
 The model is
-% \begin{equation} \label{eq:4-latregrasch}
-%   \Pr(y_{ij} = 1 | w_j, \lambda, \zeta_j, \delta_i) =
-%   \mathrm{logit}^{-1}(w_j' \lambda + \zeta_j - \delta_i),
-% \end{equation}
 \begin{equation} \label{eq:4-latregrasch}
   y_{ij} | w_j, \lambda, \zeta_j, \delta_i \sim
   \mathrm{Bernoulli}\left (

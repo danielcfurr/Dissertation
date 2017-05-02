@@ -7,8 +7,7 @@ The dissertation may be "compiled" by executing these files in the following ord
 * chapter_2/chapter_2.Rnw
 * chapter_3/simulation/simulation.R
 * chapter_3/simulation/bootstrap.R
-* chapter_3/application/bootstrap.R
-* chapter_3/application/brute_force.R
+* chapter_3/application/application.R
 * chapter_3/chapter_3.Rnw
 * appendix/appendix.Rnw
 * compile_chapters.R
