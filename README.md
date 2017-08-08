@@ -13,3 +13,4 @@ The dissertation may be "compiled" by executing these files in the following ord
 * compile_chapters.R
 * master.tex
   
+The dissertation itself is master.pdf.
