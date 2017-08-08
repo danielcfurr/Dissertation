@@ -39,3 +39,4 @@ appendix/appendix.tex
 *Archive*
 *.lof
 *.lot
+!master.pdf

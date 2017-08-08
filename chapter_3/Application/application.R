@@ -86,9 +86,36 @@ variables_to_save <- c(variables_to_save, "n_agq", "agq_results")
 
 # Fit the models and get conditional/marginal IC with bootstrapping ------------
 
+# Function to get approximate MC error for WAIC penalty term
+# This was added by request for paper with Sophia and Ed. It does not
+# necessarily work and should not really be used.
+waic_p_mcerror <- function(ll, n_chains) {
+  a <- array(ll, c(nrow(ll) / n_chains, n_chains, ncol(ll)))
+  m <- monitor(a, warmup = 0, print = FALSE)
+  n <- m[,"n_eff"]
+  v <- m[,"sd"]^2
+  # mcerror_variances <- v / (2*(n-1))
+  mcerror_variances <- 2/(n-1) * v^2
+  total_penalty_mcerror <- sqrt(sum(mcerror_variances))
+  return(total_penalty_mcerror)
+}
+
+# Function to get approximate MC error for PART of the DIC penalty term
+# The MC error for the posterior mean log-likelihood
+# This was added by request for paper with Sophia and Ed. It does not
+# necessarily work and should not really be used.
+dic_p_mcerror <- function(ll, n_chains) {
+  full_data_loglik_by_draw <- apply(ll, 1, sum)
+  a <- array(full_data_loglik_by_draw,
+             c(length(full_data_loglik_by_draw) / n_chains, n_chains, 1))
+  m <- monitor(a, warmup = 0, print = FALSE)
+  return(m[1, "se_mean"])
+}
+
 cond_dic <- cond_waic <- cond_loo <- list()
 marg_dic <- marg_waic <- marg_loo <- list()
-bad_rhats <- list()
+cond_dic_p_mce <- marg_dic_p_mce <- cond_waic_p_mce <- marg_waic_p_mce <- list()
+nonconverge <- list()
 
 model_expand <- rep(1:length(model_list), times = n_repeats)
 
@@ -107,6 +134,7 @@ for(i in 1:length(model_expand)) {
     sum_mat <- summary(fit, pars = monitor_pars, probs = NA)[["summary"]]
     bad_rhats <- rownames(sum_mat)[sum_mat[, "Rhat"] > 1.1]
     if(length(bad_rhats) > 0) {
+      message("Non-converged model")
       nonconverge[[length(nonconverge) + 1]] <- row.names(sum_mat)[bad_rhats]
     } else {
       retry <- FALSE
@@ -132,14 +160,24 @@ for(i in 1:length(model_expand)) {
   marg_loo[[i]] <- c(i = i, model = model_expand[i],
                      loo_wrapper(ll_marg$ll, cores = n_cores))
 
+  # MC error approximations for DIC and WAIC penalty terms
+  cond_dic_p_mce[[i]] <- c(i = i, model = model_expand[i],
+                           mce = dic_p_mcerror(ll_cond_ij$ll, n_chains = n_chains))
+  marg_dic_p_mce[[i]] <- c(i = i, model = model_expand[i],
+                           mce = dic_p_mcerror(ll_marg$ll, n_chains = n_chains))
+  cond_waic_p_mce[[i]] <- c(i = i, model = model_expand[i],
+                            mce = waic_p_mcerror(ll_cond_ij$ll, n_chains = n_chains))
+  marg_waic_p_mce[[i]] <- c(i = i, model = model_expand[i],
+                            mce = waic_p_mcerror(ll_marg$ll, n_chains = n_chains))
+
 }
 
 # Format IC results
 
-combine_focus <- function(clist, mlist) {
+combine_focus <- function(clist, mlist, id_vars = c("focus", "model", "i")) {
   df_c <- data.frame(focus = "Conditional", do.call(rbind, clist))
   df_m <- data.frame(focus = "Marginal", do.call(rbind, mlist))
-  df_long <- melt(rbind(df_c, df_m), id.vars = c("focus", "model", "i"))
+  df_long <- melt(rbind(df_c, df_m), id.vars = id_vars)
   return(df_long)
 }
 
@@ -147,12 +185,17 @@ df_models <- rbind(combine_focus(cond_dic, marg_dic),
                    combine_focus(cond_waic, marg_waic),
                    combine_focus(cond_loo, marg_loo))
 
+id_vars <-  c("focus", "model", "i")
+df_penalty_mce_dic <- combine_focus(cond_dic_p_mce, marg_dic_p_mce, id_vars)
+df_penalty_mce_waic <- combine_focus(cond_waic_p_mce, marg_waic_p_mce, id_vars)
+
 # Format summary() results
 
 end <- Sys.time()
 end - start
 
 variables_to_save <- c(variables_to_save, "df_models", "bad_rhats",
+                       "df_penalty_mce_dic", "df_penalty_mce_waic",
                        "start", "end")
 
 save(list = variables_to_save, file = "application.Rdata")

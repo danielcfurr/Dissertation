@@ -932,9 +932,33 @@ Figure~\ref{fig:3-example-ic} provides the estimates for the information criteri
 \begin{figure}
 \begin{center}
 <<mcerror_plot, fig = TRUE>>=
-ggplot(subset(df, variable == "estimate")) +
-  aes(y = value, x = as.factor(model)) +
-  geom_jitter(height = 0, width = .1, alpha = .25) +
+# Subset the data frame to only IC estimates
+df_estimates <- subset(df, variable == "estimate")
+
+# Obtain a second dataframe of fake points that have same range in the
+# conditional and marginal case
+df_min <- dcast(df_estimates, focus ~ ., min)
+names(df_min)[names(df_min)=="."] <- "value"
+df_max <- dcast(df_estimates, focus  ~ ., max)
+names(df_max)[names(df_max)=="."] <- "value"
+ranges <- df_max$value - df_min$value
+adjustment <- (max(ranges) - ranges) / 2
+df_min$value <- df_min$value - adjustment
+df_max$value <- df_max$value + adjustment
+
+# Make the fake data frame match the real one.
+df_adjusted <- rbind(df_min, df_max)
+df_adjusted$variable = "estimate"
+df_adjusted$model <- df_estimates$model[1] # Arbitrary
+df_adjusted$criterion <- df_estimates$criterion[1] # Arbitrary
+
+# Plot real and fake dataframes. Fake data frame puts both axes on same width.
+ggplot() +
+  geom_jitter(height = 0, width = .1, alpha = .25,
+              mapping = aes(y = value, x = as.factor(model)),
+              data = df_estimates) +
+  geom_point(mapping = aes(y = value, x = as.factor(model)),
+             data = df_adjusted, alpha = 0) +
   facet_grid(focus ~ Criterion, scale = "free_y") +
   labs(y = "Information criteria value", x = "Model") +
   my_theme +
@@ -942,7 +966,7 @@ ggplot(subset(df, variable == "estimate")) +
 @
 \end{center}
 \caption[Information criteria values for the five latent regression Rasch models]
-{Information criteria values ($-2 \widehat \mathrm{elpd}$) for the five latent regression Rasch models. Points represent the results of the $\Sexpr{n_repeats}$ independent MCMC simulations per model. A small amount of horizontal jitter is added to the points. The $y$-axes vary by focus.}
+{Information criteria values ($-2 \widehat \mathrm{elpd}$) for the five latent regression Rasch models. Points represent the results of the $\Sexpr{n_repeats}$ independent MCMC simulations per model. A small amount of horizontal jitter is added to the points. The $y$-axes vary by focus but have the same width.}
 \label{fig:3-example-ic}
 \end{figure}
 
