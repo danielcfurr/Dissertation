@@ -40,3 +40,5 @@ appendix/appendix.tex
 *.lof
 *.lot
 !master.pdf
+chapter_3/Application/sanity check on white mce.R
+chapter_3/Simulation/mc_error_estimation.R
